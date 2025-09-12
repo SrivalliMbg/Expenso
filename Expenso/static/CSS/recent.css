@@ -1,0 +1,263 @@
+/* Recent Transactions CSS - Matching Other Pages Style */
+
+/* ===========================
+   Logo Styling
+   =========================== */
+.logo-link {
+  display: block;
+  text-decoration: none;
+  margin-bottom: 15px;
+}
+
+.logo {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #e3a241;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: transform 0.3s ease;
+}
+
+.logo:hover {
+  transform: scale(1.05);
+}
+
+/* ===========================
+   Page Layout
+   =========================== */
+.transactions-container {
+  margin-left: 200px; /* Account for fixed sidebar */
+  padding: 20px;
+  min-height: 100vh;
+  background: transparent;
+}
+
+/* ===========================
+   Page Header
+   =========================== */
+.page-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 25px 30px;
+  border-radius: 15px;
+  margin-bottom: 30px;
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.2);
+}
+
+.page-header h1 {
+  margin: 0 0 10px 0;
+  font-size: 2.2rem;
+  font-weight: 700;
+}
+
+.page-header p {
+  margin: 0;
+  font-size: 1.1rem;
+  opacity: 0.9;
+}
+
+/* ===========================
+   Overview Cards
+   =========================== */
+.transactions-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.overview-card {
+  background: white;
+  padding: 20px;
+  border-radius: 15px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+  text-align: center;
+  transition: transform 0.2s ease;
+}
+
+.overview-card:hover {
+  transform: translateY(-5px);
+}
+
+.overview-card h3 {
+  margin: 0 0 10px 0;
+  font-size: 1.1rem;
+  color: #6c757d;
+}
+
+.overview-card p {
+  margin: 0;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #2c3e50;
+}
+
+/* ===========================
+   Main Section
+   =========================== */
+.transactions-section {
+  background: white;
+  padding: 25px;
+  border-radius: 15px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #eee;
+}
+
+.section-header h2 {
+  margin: 0;
+  font-size: 1.8rem;
+  color: #2c3e50;
+}
+
+/* ===========================
+   Transactions List
+   =========================== */
+.transactions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.transaction-card {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 20px;
+  background: transparent;
+  border: 1px solid #e9ecef;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.transaction-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.transaction-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  color: white;
+}
+
+.transaction-details {
+  flex: 1;
+}
+
+.transaction-details h4 {
+  margin: 0 0 5px 0;
+  font-size: 1.1rem;
+  color: #2c3e50;
+}
+
+.transaction-meta {
+  display: flex;
+  gap: 15px;
+  font-size: 0.9rem;
+  color: #6c757d;
+}
+
+.transaction-amount {
+  font-size: 1.2rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+.transaction-amount.credit {
+  color: #28a745;
+}
+
+.transaction-amount.debit {
+  color: #dc3545;
+}
+
+.amount-sign {
+  font-size: 1rem;
+  margin-right: 5px;
+}
+
+/* ===========================
+   Empty State
+   =========================== */
+.empty-state {
+  text-align: center;
+  padding: 50px 20px;
+  background: transparent;
+  border-radius: 15px;
+  border: 1px dashed #ced4da;
+  color: #6c757d;
+}
+
+.empty-icon {
+  font-size: 3rem;
+  margin-bottom: 15px;
+}
+
+.empty-state h3 {
+  margin: 0 0 10px 0;
+  color: #343a40;
+  font-size: 1.5rem;
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 1rem;
+}
+
+/* ===========================
+   Responsive Design
+   =========================== */
+@media (max-width: 768px) {
+  .transactions-container {
+    margin-left: 0; /* Remove sidebar margin on mobile */
+    padding: 15px;
+  }
+  
+  .page-header {
+    padding: 20px;
+  }
+  
+  .page-header h1 {
+    font-size: 1.8rem;
+  }
+  
+  .page-header p {
+    font-size: 1rem;
+  }
+  
+  .transactions-overview {
+    grid-template-columns: 1fr;
+  }
+  
+  .transactions-section {
+    padding: 15px;
+  }
+  
+  .section-header h2 {
+    font-size: 1.5rem;
+  }
+  
+  .transaction-card {
+    flex-direction: column;
+    text-align: center;
+    gap: 10px;
+  }
+  
+  .transaction-meta {
+    justify-content: center;
+  }
+}

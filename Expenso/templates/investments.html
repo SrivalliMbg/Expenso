@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Investments - Expenso</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='CSS/home.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='CSS/accounts.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='CSS/insurance.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='CSS/investments.css') }}" />
+  <script src="{{ url_for('static', filename='js/investments.js') }}" defer></script>
+</head>
+<body>
+  <div class="container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="profile">
+        <div class="profile-row">
+          <a href="/" class="logo-link">
+            <img src="{{ url_for('static', filename='images/logo.jpg') }}" alt="Expenso Logo" class="logo">
+          </a>
+        </div>
+        <div class="username-row">
+          <span class="username" id="sidebarUsername">{{ username }}</span>
+        </div>
+      </div>
+      <nav class="menu">
+        <a href="/accounts_page">Accounts</a>
+        <a href="/cards_page">Cards</a>
+        <a href="/insurance_page">Insurance</a>
+        <a href="/investments_page" class="active">Investments</a>
+        <a href="/recent_page">Recent Transactions</a>
+        <a href="/expenses_page">Expenses</a>
+        <a href="/logout_page" class="logout" onclick="return confirmLogout();">Logout</a>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="dashboard">
+      <div id="root"></div>
+    </main>
+  </div>
+
+  <script>
+    function confirmLogout() {
+      return confirm("Are you sure you want to logout?");
+    }
+
+    // Populate sidebar with user data
+    document.addEventListener("DOMContentLoaded", () => {
+      const user = JSON.parse(sessionStorage.getItem("user"));
+      if (user) {
+        document.getElementById("sidebarUsername").textContent = user.username;
+      } else {
+        window.location.href = "/login_page";
+      }
+    });
+  </script>
+</body>
+</html>
