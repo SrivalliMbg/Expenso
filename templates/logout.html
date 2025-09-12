@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Logout - Expenso</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>You have been logged out</h1>
+        <p>We hope to see you back soon!</p>
+        <a href="{{ url_for('main.login_page') }}">Login Again</a>
+    </div>
+</body>
+</html>
+
