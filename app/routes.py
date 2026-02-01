@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify, render_template, current_app, session, redirect, url_for
 from werkzeug.security import generate_password_hash, check_password_hash
+from .totp_utils import TOTPManager
 
 # ---------------- Blueprints ---------------- #
 main = Blueprint("main", __name__)
@@ -26,6 +27,14 @@ def register_page():
 @main.route("/profile_page")
 def profile_page():
     return render_template("profile.html")
+
+@main.route("/totp_setup_page")
+def totp_setup_page():
+    return render_template("totp_setup.html")
+
+@main.route("/web_authenticator")
+def web_authenticator():
+    return render_template("web_authenticator.html")
 
 @main.route("/accounts_page")
 def accounts_page():
@@ -111,6 +120,7 @@ def login():
     data = request.json
     username = data.get("username")
     password = data.get("password")
+    totp_code = data.get("totp_code")  # Optional TOTP code
 
     try:
         cursor = current_app.mysql.cursor(dictionary=True)
@@ -119,7 +129,22 @@ def login():
         cursor.close()
 
         if user and check_password_hash(user["password"], password):
+            # Check if TOTP is enabled for this user
+            if user.get("totp_secret"):
+                # TOTP is enabled, verify the code
+                if not totp_code:
+                    return jsonify({
+                        "message": "TOTP code required", 
+                        "requires_totp": True,
+                        "user_id": user["id"]
+                    }), 200
+                
+                if not TOTPManager.verify_totp(user["totp_secret"], totp_code):
+                    return jsonify({"message": "Invalid TOTP code"}), 401
+            
+            # Login successful
             user.pop("password")  # remove sensitive info
+            user.pop("totp_secret")  # remove TOTP secret from response
             session["user_id"] = user["id"]
             return jsonify({"message": "Login successful", "user": user}), 200
         else:
@@ -139,6 +164,108 @@ def get_users():
         users = cursor.fetchall()
         cursor.close()
         return jsonify(users), 200
+    except Exception as e:
+        return jsonify({"message": f"Error: {str(e)}"}), 500
+
+# -------------------- TOTP Management -------------------- #
+@main.route("/totp/setup", methods=["POST"])
+def setup_totp():
+    """Generate TOTP secret and QR code for user setup"""
+    if not current_app.mysql:
+        return jsonify({"message": "Database not available"}), 503
+    
+    data = request.json
+    user_id = data.get("user_id")
+    
+    if not user_id:
+        return jsonify({"message": "User ID required"}), 400
+    
+    try:
+        # Generate new TOTP secret
+        secret = TOTPManager.generate_secret()
+        
+        # Get user info for QR code
+        cursor = current_app.mysql.cursor(dictionary=True)
+        cursor.execute("SELECT username FROM users WHERE id = %s", (user_id,))
+        user = cursor.fetchone()
+        cursor.close()
+        
+        if not user:
+            return jsonify({"message": "User not found"}), 404
+        
+        # Generate QR code
+        qr_code = TOTPManager.generate_qr_code(secret, user["username"])
+        
+        return jsonify({
+            "secret": secret,
+            "qr_code": qr_code,
+            "message": "TOTP setup data generated"
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"message": f"Error: {str(e)}"}), 500
+
+@main.route("/totp/verify", methods=["POST"])
+def verify_totp_setup():
+    """Verify TOTP code during setup and enable TOTP for user"""
+    if not current_app.mysql:
+        return jsonify({"message": "Database not available"}), 503
+    
+    data = request.json
+    user_id = data.get("user_id")
+    secret = data.get("secret")
+    totp_code = data.get("totp_code")
+    
+    if not all([user_id, secret, totp_code]):
+        return jsonify({"message": "User ID, secret, and TOTP code required"}), 400
+    
+    try:
+        # Verify the TOTP code
+        if not TOTPManager.verify_totp(secret, totp_code):
+            return jsonify({"message": "Invalid TOTP code"}), 400
+        
+        # Enable TOTP for the user
+        if TOTPManager.enable_totp(user_id, secret):
+            return jsonify({"message": "TOTP enabled successfully"}), 200
+        else:
+            return jsonify({"message": "Failed to enable TOTP"}), 500
+            
+    except Exception as e:
+        return jsonify({"message": f"Error: {str(e)}"}), 500
+
+@main.route("/totp/disable", methods=["POST"])
+def disable_totp():
+    """Disable TOTP for a user"""
+    if not current_app.mysql:
+        return jsonify({"message": "Database not available"}), 503
+    
+    data = request.json
+    user_id = data.get("user_id")
+    
+    if not user_id:
+        return jsonify({"message": "User ID required"}), 400
+    
+    try:
+        if TOTPManager.disable_totp(user_id):
+            return jsonify({"message": "TOTP disabled successfully"}), 200
+        else:
+            return jsonify({"message": "Failed to disable TOTP"}), 500
+            
+    except Exception as e:
+        return jsonify({"message": f"Error: {str(e)}"}), 500
+
+@main.route("/totp/status", methods=["GET"])
+def get_totp_status():
+    """Get TOTP status for a user"""
+    user_id = request.args.get("user_id")
+    
+    if not user_id:
+        return jsonify({"message": "User ID required"}), 400
+    
+    try:
+        is_enabled = TOTPManager.is_totp_enabled(user_id)
+        return jsonify({"totp_enabled": is_enabled}), 200
+        
     except Exception as e:
         return jsonify({"message": f"Error: {str(e)}"}), 500
 

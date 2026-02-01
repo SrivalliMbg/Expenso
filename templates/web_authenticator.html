@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Authenticator - Expenso</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='CSS/style.css') }}">
+    <style>
+        .authenticator-container {
+            max-width: 400px;
+            margin: 50px auto;
+            padding: 30px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        
+        .authenticator-header {
+            margin-bottom: 30px;
+        }
+        
+        .authenticator-header h1 {
+            color: #007bff;
+            margin-bottom: 10px;
+        }
+        
+        .authenticator-header p {
+            color: #666;
+            margin: 0;
+        }
+        
+        .totp-display {
+            background: #f8f9fa;
+            border: 2px solid #dee2e6;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .totp-code {
+            font-size: 32px;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            color: #007bff;
+            letter-spacing: 4px;
+            margin: 10px 0;
+        }
+        
+        .totp-timer {
+            font-size: 14px;
+            color: #666;
+            margin: 10px 0;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #e9ecef;
+            border-radius: 2px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #28a745, #ffc107, #dc3545);
+            transition: width 1s linear;
+        }
+        
+        .account-info {
+            background: #e3f2fd;
+            border: 1px solid #bbdefb;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+            text-align: left;
+        }
+        
+        .account-info h3 {
+            margin: 0 0 10px 0;
+            color: #1976d2;
+            font-size: 16px;
+        }
+        
+        .account-info p {
+            margin: 5px 0;
+            font-size: 14px;
+            color: #424242;
+        }
+        
+        .controls {
+            margin: 20px 0;
+        }
+        
+        .btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+            transition: background 0.2s;
+        }
+        
+        .btn:hover {
+            background: #0056b3;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+        }
+        
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+        
+        .btn-success {
+            background: #28a745;
+        }
+        
+        .btn-success:hover {
+            background: #1e7e34;
+        }
+        
+        .status-message {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            display: none;
+        }
+        
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .setup-section {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .setup-section h3 {
+            margin-top: 0;
+            color: #856404;
+        }
+        
+        .secret-input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-family: monospace;
+            margin: 10px 0;
+        }
+        
+        .qr-code-display {
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        .qr-code-display img {
+            max-width: 200px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="authenticator-container">
+            <div class="authenticator-header">
+                <h1>🔐 Web Authenticator</h1>
+                <p>Generate TOTP codes for your accounts</p>
+            </div>
+            
+            <div id="setupSection" class="setup-section">
+                <h3>Setup New Account</h3>
+                <p>Enter your TOTP secret key or scan QR code:</p>
+                
+                <input type="text" id="secretInput" class="secret-input" placeholder="Enter your secret key (e.g., JBSWY3DPEHPK3PXP)">
+                
+                <div class="qr-code-display" id="qrCodeDisplay" style="display: none;">
+                    <img id="qrCodeImage" src="" alt="QR Code">
+                </div>
+                
+                <div class="controls">
+                    <button class="btn" onclick="addAccount()">Add Account</button>
+                    <button class="btn btn-secondary" onclick="generateQR()">Generate QR Code</button>
+                </div>
+            </div>
+            
+            <div id="authenticatorSection" style="display: none;">
+                <div class="account-info">
+                    <h3 id="accountName">Account Name</h3>
+                    <p id="accountIssuer">Issuer: Expenso</p>
+                    <p id="accountSecret">Secret: ••••••••••••••••</p>
+                </div>
+                
+                <div class="totp-display">
+                    <div class="totp-code" id="totpCode">------</div>
+                    <div class="totp-timer" id="totpTimer">Time remaining: 30s</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                </div>
+                
+                <div class="controls">
+                    <button class="btn btn-success" onclick="copyCode()">Copy Code</button>
+                    <button class="btn btn-secondary" onclick="removeAccount()">Remove Account</button>
+                    <button class="btn" onclick="addNewAccount()">Add New Account</button>
+                </div>
+            </div>
+            
+            <div id="statusMessage" class="status-message"></div>
+        </div>
+    </div>
+
+    <script>
+        // TOTP implementation using JavaScript
+        class TOTPGenerator {
+            constructor() {
+                this.accounts = JSON.parse(localStorage.getItem('totp_accounts') || '[]');
+                this.currentAccount = null;
+                this.timer = null;
+            }
+            
+            // Base32 decoding
+            base32Decode(str) {
+                const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+                let bits = '';
+                let result = '';
+                
+                for (let i = 0; i < str.length; i++) {
+                    const val = alphabet.indexOf(str[i].toUpperCase());
+                    if (val === -1) continue;
+                    bits += val.toString(2).padStart(5, '0');
+                }
+                
+                for (let i = 0; i < bits.length; i += 8) {
+                    const byte = bits.substr(i, 8);
+                    if (byte.length === 8) {
+                        result += String.fromCharCode(parseInt(byte, 2));
+                    }
+                }
+                
+                return result;
+            }
+            
+            // HMAC-SHA1 implementation (simplified)
+            hmacSha1(key, message) {
+                // This is a simplified implementation
+                // In production, use a proper crypto library
+                const blockSize = 64;
+                const keyBytes = this.stringToBytes(key);
+                const messageBytes = this.stringToBytes(message);
+                
+                if (keyBytes.length > blockSize) {
+                    keyBytes = this.sha1(keyBytes);
+                }
+                
+                while (keyBytes.length < blockSize) {
+                    keyBytes.push(0);
+                }
+                
+                const oKeyPad = keyBytes.map(b => b ^ 0x5c);
+                const iKeyPad = keyBytes.map(b => b ^ 0x36);
+                
+                const innerHash = this.sha1(iKeyPad.concat(messageBytes));
+                return this.sha1(oKeyPad.concat(innerHash));
+            }
+            
+            stringToBytes(str) {
+                const bytes = [];
+                for (let i = 0; i < str.length; i++) {
+                    bytes.push(str.charCodeAt(i) & 0xff);
+                }
+                return bytes;
+            }
+            
+            // Simplified SHA1 implementation
+            sha1(bytes) {
+                // This is a placeholder - use a proper crypto library in production
+                // For demo purposes, we'll use a simple hash
+                let hash = 0;
+                for (let i = 0; i < bytes.length; i++) {
+                    hash = ((hash << 5) - hash + bytes[i]) & 0xffffffff;
+                }
+                return [hash & 0xff, (hash >> 8) & 0xff, (hash >> 16) & 0xff, (hash >> 24) & 0xff];
+            }
+            
+            generateTOTP(secret, timeStep = 30) {
+                const time = Math.floor(Date.now() / 1000 / timeStep);
+                const key = this.base32Decode(secret);
+                const message = this.timeToBytes(time);
+                const hash = this.hmacSha1(key, message);
+                const offset = hash[hash.length - 1] & 0xf;
+                const code = ((hash[offset] & 0x7f) << 24) |
+                           ((hash[offset + 1] & 0xff) << 16) |
+                           ((hash[offset + 2] & 0xff) << 8) |
+                           (hash[offset + 3] & 0xff);
+                return (code % 1000000).toString().padStart(6, '0');
+            }
+            
+            timeToBytes(time) {
+                const bytes = [];
+                for (let i = 7; i >= 0; i--) {
+                    bytes.push((time >> (i * 8)) & 0xff);
+                }
+                return String.fromCharCode(...bytes);
+            }
+            
+            addAccount(name, secret, issuer = 'Expenso') {
+                const account = { name, secret, issuer, id: Date.now() };
+                this.accounts.push(account);
+                localStorage.setItem('totp_accounts', JSON.stringify(this.accounts));
+                this.showMessage('Account added successfully!', false);
+                return account;
+            }
+            
+            removeAccount(accountId) {
+                this.accounts = this.accounts.filter(acc => acc.id !== accountId);
+                localStorage.setItem('totp_accounts', JSON.stringify(this.accounts));
+                if (this.currentAccount && this.currentAccount.id === accountId) {
+                    this.currentAccount = null;
+                    this.stopTimer();
+                    this.showSetupSection();
+                }
+            }
+            
+            startTimer() {
+                this.stopTimer();
+                this.updateDisplay();
+                this.timer = setInterval(() => this.updateDisplay(), 1000);
+            }
+            
+            stopTimer() {
+                if (this.timer) {
+                    clearInterval(this.timer);
+                    this.timer = null;
+                }
+            }
+            
+            updateDisplay() {
+                if (!this.currentAccount) return;
+                
+                const code = this.generateTOTP(this.currentAccount.secret);
+                const timeLeft = 30 - (Math.floor(Date.now() / 1000) % 30);
+                const progress = (timeLeft / 30) * 100;
+                
+                document.getElementById('totpCode').textContent = code;
+                document.getElementById('totpTimer').textContent = `Time remaining: ${timeLeft}s`;
+                document.getElementById('progressFill').style.width = `${progress}%`;
+            }
+            
+            showSetupSection() {
+                document.getElementById('setupSection').style.display = 'block';
+                document.getElementById('authenticatorSection').style.display = 'none';
+            }
+            
+            showAuthenticatorSection(account) {
+                this.currentAccount = account;
+                document.getElementById('setupSection').style.display = 'none';
+                document.getElementById('authenticatorSection').style.display = 'block';
+                
+                document.getElementById('accountName').textContent = account.name;
+                document.getElementById('accountIssuer').textContent = `Issuer: ${account.issuer}`;
+                document.getElementById('accountSecret').textContent = `Secret: ${'•'.repeat(16)}`;
+                
+                this.startTimer();
+            }
+            
+            showMessage(message, isError = false) {
+                const statusDiv = document.getElementById('statusMessage');
+                statusDiv.textContent = message;
+                statusDiv.className = `status-message ${isError ? 'status-error' : 'status-success'}`;
+                statusDiv.style.display = 'block';
+                
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 3000);
+            }
+        }
+        
+        // Initialize TOTP generator
+        const totp = new TOTPGenerator();
+        
+        // Check if there are existing accounts
+        if (totp.accounts.length > 0) {
+            totp.showAuthenticatorSection(totp.accounts[0]);
+        }
+        
+        function addAccount() {
+            const secret = document.getElementById('secretInput').value.trim();
+            const name = prompt('Enter account name:', 'Expenso Account');
+            
+            if (!secret || !name) {
+                totp.showMessage('Please enter both secret key and account name', true);
+                return;
+            }
+            
+            if (secret.length < 16) {
+                totp.showMessage('Secret key must be at least 16 characters', true);
+                return;
+            }
+            
+            const account = totp.addAccount(name, secret);
+            totp.showAuthenticatorSection(account);
+            document.getElementById('secretInput').value = '';
+        }
+        
+        function generateQR() {
+            const secret = document.getElementById('secretInput').value.trim();
+            if (!secret) {
+                totp.showMessage('Please enter a secret key first', true);
+                return;
+            }
+            
+            // Generate QR code using a simple method
+            const qrData = `otpauth://totp/Expenso?secret=${secret}&issuer=Expenso`;
+            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrData)}`;
+            
+            document.getElementById('qrCodeImage').src = qrUrl;
+            document.getElementById('qrCodeDisplay').style.display = 'block';
+        }
+        
+        function copyCode() {
+            const code = document.getElementById('totpCode').textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                totp.showMessage('Code copied to clipboard!', false);
+            }).catch(() => {
+                totp.showMessage('Failed to copy code', true);
+            });
+        }
+        
+        function removeAccount() {
+            if (confirm('Are you sure you want to remove this account?')) {
+                totp.removeAccount(totp.currentAccount.id);
+                totp.showMessage('Account removed', false);
+            }
+        }
+        
+        function addNewAccount() {
+            totp.showSetupSection();
+        }
+    </script>
+</body>
+</html>

@@ -4,6 +4,56 @@
     <title>Profile - Expenso</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="{{ url_for('static', filename='js/main.js') }}" defer></script>
+    <style>
+        .totp-field {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        
+        .totp-field label {
+            font-weight: bold;
+            min-width: 200px;
+        }
+        
+        .totp-field span {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        
+        .totp-enabled {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .totp-disabled {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        #totpToggleBtn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        #totpToggleBtn:hover {
+            background: #0056b3;
+        }
+        
+        #totpToggleBtn.disable {
+            background: #dc3545;
+        }
+        
+        #totpToggleBtn.disable:hover {
+            background: #c82333;
+        }
+    </style>
 </head>
 <body>
   <div class="container">
@@ -21,10 +71,99 @@
       <div><label>Date of Birth:</label><span id="profileDOB"></span></div>
       <div><label>Phone:</label><span id="profilePhone"></span></div>
       <div><label>Profession:</label><span id="profileProfession"></span></div>
+      <div class="totp-field">
+        <label>Two-Factor Authentication:</label>
+        <span id="totpStatus">Checking...</span>
+        <button id="totpToggleBtn" style="display: none;">Enable TOTP</button>
+      </div>
     </div>
 
     <button class="logout-btn" id="logoutBtn">Logout</button>
   </div>
+
+  <script>
+    // TOTP Management
+    document.addEventListener("DOMContentLoaded", async () => {
+      const user = JSON.parse(sessionStorage.getItem("user"));
+      if (!user || !user.id) {
+        window.location.href = "/login_page";
+        return;
+      }
+
+      // Check TOTP status
+      await checkTOTPStatus(user.id);
+      
+      // Setup TOTP toggle button
+      const totpToggleBtn = document.getElementById("totpToggleBtn");
+      if (totpToggleBtn) {
+        totpToggleBtn.addEventListener("click", () => {
+          const isEnabled = totpToggleBtn.textContent.includes("Disable");
+          if (isEnabled) {
+            disableTOTP(user.id);
+          } else {
+            enableTOTP(user.id);
+          }
+        });
+      }
+    });
+
+    async function checkTOTPStatus(userId) {
+      try {
+        const response = await fetch(`/totp/status?user_id=${userId}`);
+        const data = await response.json();
+        
+        const statusSpan = document.getElementById("totpStatus");
+        const toggleBtn = document.getElementById("totpToggleBtn");
+        
+        if (data.totp_enabled) {
+          statusSpan.textContent = "Enabled";
+          statusSpan.className = "totp-enabled";
+          toggleBtn.textContent = "Disable TOTP";
+          toggleBtn.className = "disable";
+        } else {
+          statusSpan.textContent = "Disabled";
+          statusSpan.className = "totp-disabled";
+          toggleBtn.textContent = "Enable TOTP";
+          toggleBtn.className = "";
+        }
+        
+        toggleBtn.style.display = "inline-block";
+      } catch (error) {
+        console.error("Error checking TOTP status:", error);
+        document.getElementById("totpStatus").textContent = "Error";
+      }
+    }
+
+    async function enableTOTP(userId) {
+      if (confirm("This will redirect you to the TOTP setup page. Continue?")) {
+        window.location.href = `/totp_setup_page?user_id=${userId}`;
+      }
+    }
+
+    async function disableTOTP(userId) {
+      if (confirm("Are you sure you want to disable TOTP? This will make your account less secure.")) {
+        try {
+          const response = await fetch("/totp/disable", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user_id: userId })
+          });
+
+          const data = await response.json();
+          
+          if (response.ok) {
+            alert("TOTP disabled successfully");
+            await checkTOTPStatus(userId);
+          } else {
+            alert(data.message || "Failed to disable TOTP");
+          }
+        } catch (error) {
+          alert("Error disabling TOTP");
+          console.error(error);
+        }
+      }
+    }
+  </script>
 </body>
 
 

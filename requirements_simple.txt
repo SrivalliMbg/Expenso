@@ -5,3 +5,8 @@ Werkzeug==2.3.7
 pandas==2.0.3
 numpy==1.24.3
 yfinance==0.2.18
+pyotp==2.9.0
+qrcode==7.4.2
+Pillow==10.0.1
+pyOpenSSL==23.3.0
+cryptography==41.0.7

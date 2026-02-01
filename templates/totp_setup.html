@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TOTP Setup - Expenso</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='CSS/style.css') }}">
+    <style>
+        .totp-container {
+            max-width: 1200px;
+            margin: 30px auto;
+            padding: 40px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .setup-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            margin-top: 30px;
+        }
+        
+        .left-column {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+        
+        .right-column {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+        
+        .qr-section {
+            text-align: center;
+            margin: 25px 0;
+        }
+        
+        .qr-code {
+            max-width: 200px;
+            margin: 20px auto;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 10px;
+            background: white;
+        }
+        
+        .secret-display {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            word-break: break-all;
+            margin: 15px 0;
+            border: 1px solid #ddd;
+        }
+        
+        .step {
+            margin: 25px 0;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+        }
+        
+        .step h3 {
+            margin-top: 0;
+            color: #007bff;
+        }
+        
+        .totp-input {
+            width: 100%;
+            padding: 15px;
+            margin: 15px 0;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            text-align: center;
+            letter-spacing: 2px;
+        }
+        
+        .btn {
+            background: #007bff;
+            color: white;
+            padding: 14px 28px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 12px 8px;
+        }
+        
+        .btn:hover {
+            background: #0056b3;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+        }
+        
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+        
+        .status-message {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            display: none;
+        }
+        
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .authenticator-apps {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        
+        .app-card {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 25px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .app-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        
+        .app-card h4 {
+            margin: 0 0 10px 0;
+            color: #007bff;
+            font-size: 18px;
+        }
+        
+        .app-card p {
+            margin: 0 0 15px 0;
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .download-links {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        
+        .download-btn {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-size: 14px;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        
+        .download-btn:hover {
+            background: #0056b3;
+            color: white;
+            text-decoration: none;
+        }
+        
+        .download-btn.ios {
+            background: #007AFF;
+        }
+        
+        .download-btn.ios:hover {
+            background: #0056CC;
+        }
+        
+        .download-btn.android {
+            background: #3DDC84;
+        }
+        
+        .download-btn.android:hover {
+            background: #2BB56B;
+        }
+        
+        .alternative-apps {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #6c757d;
+        }
+        
+        .alternative-apps h4 {
+            margin-top: 0;
+            color: #6c757d;
+        }
+        
+        .alternative-apps ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        
+        .alternative-apps li {
+            margin: 5px 0;
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .setup-grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+            
+            .totp-container {
+                margin: 20px;
+                padding: 20px;
+            }
+            
+            .authenticator-apps {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="totp-container">
+            <h1>🔐 Two-Factor Authentication Setup</h1>
+            <p>Secure your account with Time-based One-Time Password (TOTP) authentication.</p>
+            
+            <div id="setupSection">
+                <div class="setup-grid">
+                    <div class="left-column">
+                        <div class="step">
+                            <h3>Step 1: Install an Authenticator App</h3>
+                            <p>Download and install one of these authenticator apps on your mobile device:</p>
+                            
+                            <div class="authenticator-apps">
+                                <div class="app-card">
+                                    <h4>🔐 Google Authenticator</h4>
+                                    <p>Most popular and widely supported</p>
+                                    <div class="download-links">
+                                        <a href="https://apps.apple.com/app/google-authenticator/id388497605" target="_blank" class="download-btn ios">📱 iOS</a>
+                                        <a href="https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2" target="_blank" class="download-btn android">🤖 Android</a>
+                                    </div>
+                                </div>
+                                
+                                <div class="app-card">
+                                    <h4>🔒 Microsoft Authenticator</h4>
+                                    <p>Great for Microsoft ecosystem users</p>
+                                    <div class="download-links">
+                                        <a href="https://apps.apple.com/app/microsoft-authenticator/id983156458" target="_blank" class="download-btn ios">📱 iOS</a>
+                                        <a href="https://play.google.com/store/apps/details?id=com.azure.authenticator" target="_blank" class="download-btn android">🤖 Android</a>
+                                    </div>
+                                </div>
+                                
+                                <div class="app-card">
+                                    <h4>🛡️ Authy</h4>
+                                    <p>Cloud backup and multi-device sync</p>
+                                    <div class="download-links">
+                                        <a href="https://apps.apple.com/app/authy/id494168017" target="_blank" class="download-btn ios">📱 iOS</a>
+                                        <a href="https://play.google.com/store/apps/details?id=com.authy.authy" target="_blank" class="download-btn android">🤖 Android</a>
+                                    </div>
+                                </div>
+                                
+                                <div class="app-card">
+                                    <h4>🔑 1Password</h4>
+                                    <p>Password manager with built-in authenticator</p>
+                                    <div class="download-links">
+                                        <a href="https://apps.apple.com/app/1password-password-manager/id568903335" target="_blank" class="download-btn ios">📱 iOS</a>
+                                        <a href="https://play.google.com/store/apps/details?id=com.1password.op.android" target="_blank" class="download-btn android">🤖 Android</a>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="alternative-apps">
+                                <h4>Other Compatible Apps:</h4>
+                                <ul>
+                                    <li><strong>FreeOTP</strong> (Open source)</li>
+                                    <li><strong>AndOTP</strong> (Android only, open source)</li>
+                                    <li><strong>OTP Auth</strong> (iOS only)</li>
+                                    <li><strong>LastPass Authenticator</strong></li>
+                                </ul>
+                                
+                                <div style="margin-top: 20px; padding: 15px; background: #e8f5e8; border-radius: 8px; border-left: 4px solid #28a745;">
+                                    <h4 style="margin-top: 0; color: #155724;">🌐 Web Authenticator</h4>
+                                    <p style="margin: 10px 0; color: #155724;">Don't have a mobile device? Use our built-in web authenticator!</p>
+                                    <a href="/web_authenticator" class="download-btn" style="background: #28a745; color: white; text-decoration: none; padding: 8px 16px; border-radius: 5px; display: inline-block;">Open Web Authenticator</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="right-column">
+                        <div class="step">
+                            <h3>Step 2: Scan QR Code</h3>
+                            <p>Open your authenticator app and scan this QR code:</p>
+                            <div class="qr-section">
+                                <div id="qrCode" class="qr-code">
+                                    <p>Click "Generate QR Code" to start setup</p>
+                                </div>
+                                <button class="btn" onclick="generateQRCode()">Generate QR Code</button>
+                            </div>
+                        </div>
+                        
+                        <div class="step">
+                            <h3>Step 3: Manual Entry (Alternative)</h3>
+                            <p>If you can't scan the QR code, manually enter this secret key:</p>
+                            <div id="secretDisplay" class="secret-display hidden">
+                                <strong>Secret Key:</strong> <span id="secretKey"></span>
+                            </div>
+                        </div>
+                        
+                        <div class="step">
+                            <h3>Step 4: Verify Setup</h3>
+                            <p>Enter the 6-digit code from your authenticator app:</p>
+                            <input type="text" id="totpCode" class="totp-input" placeholder="000000" maxlength="6" pattern="[0-9]{6}">
+                            <br>
+                            <button class="btn" onclick="verifyTOTP()">Verify & Enable TOTP</button>
+                            <button class="btn btn-secondary" onclick="skipSetup()">Skip for Now</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="successSection" class="hidden">
+                <div class="step">
+                    <h3>✅ TOTP Setup Complete!</h3>
+                    <p>Two-factor authentication has been successfully enabled for your account.</p>
+                    <p>You will now be required to enter a TOTP code when logging in.</p>
+                    <button class="btn" onclick="goToDashboard()">Go to Dashboard</button>
+                </div>
+            </div>
+            
+            <div id="statusMessage" class="status-message"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentSecret = null;
+        let currentUserId = null;
+
+        // Get user ID from session or URL parameter
+        function getUserId() {
+            // You might want to get this from your session or pass it as a parameter
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('user_id') || '1'; // Default for testing
+        }
+
+        function showMessage(message, isError = false) {
+            const statusDiv = document.getElementById('statusMessage');
+            statusDiv.textContent = message;
+            statusDiv.className = `status-message ${isError ? 'status-error' : 'status-success'}`;
+            statusDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        async function generateQRCode() {
+            currentUserId = getUserId();
+            
+            try {
+                const response = await fetch('/totp/setup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        user_id: currentUserId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    currentSecret = data.secret;
+                    
+                    // Display QR code
+                    const qrDiv = document.getElementById('qrCode');
+                    qrDiv.innerHTML = `<img src="${data.qr_code}" alt="TOTP QR Code" style="max-width: 100%;">`;
+                    
+                    // Display secret key
+                    document.getElementById('secretKey').textContent = currentSecret;
+                    document.getElementById('secretDisplay').classList.remove('hidden');
+                    
+                    showMessage('QR code generated successfully!');
+                } else {
+                    showMessage(data.message || 'Failed to generate QR code', true);
+                }
+            } catch (error) {
+                showMessage('Error generating QR code: ' + error.message, true);
+            }
+        }
+
+        async function verifyTOTP() {
+            const totpCode = document.getElementById('totpCode').value;
+            
+            if (!totpCode || totpCode.length !== 6) {
+                showMessage('Please enter a valid 6-digit TOTP code', true);
+                return;
+            }
+
+            if (!currentSecret || !currentUserId) {
+                showMessage('Please generate QR code first', true);
+                return;
+            }
+
+            try {
+                const response = await fetch('/totp/verify', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        user_id: currentUserId,
+                        secret: currentSecret,
+                        totp_code: totpCode
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Hide setup section and show success
+                    document.getElementById('setupSection').classList.add('hidden');
+                    document.getElementById('successSection').classList.remove('hidden');
+                    showMessage('TOTP enabled successfully!');
+                } else {
+                    showMessage(data.message || 'Invalid TOTP code', true);
+                }
+            } catch (error) {
+                showMessage('Error verifying TOTP: ' + error.message, true);
+            }
+        }
+
+        function skipSetup() {
+            if (confirm('Are you sure you want to skip TOTP setup? Your account will be less secure.')) {
+                goToDashboard();
+            }
+        }
+
+        function goToDashboard() {
+            window.location.href = '/dashboard';
+        }
+
+        // Auto-focus on TOTP input when QR code is generated
+        document.getElementById('totpCode').addEventListener('input', function(e) {
+            // Only allow numbers
+            e.target.value = e.target.value.replace(/[^0-9]/g, '');
+        });
+    </script>
+</body>
+</html>

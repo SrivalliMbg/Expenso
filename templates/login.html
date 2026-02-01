@@ -5,6 +5,32 @@
     <title>Login - Expenso</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="{{ url_for('static', filename='js/main.js') }}" defer></script>
+    <style>
+        #totpSection {
+            margin: 15px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            border: 1px solid #dee2e6;
+        }
+        
+        #totpCode {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            text-align: center;
+            letter-spacing: 2px;
+            font-family: monospace;
+        }
+        
+        #totpCode:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -22,7 +48,15 @@
                 <span class="eye-icon" onclick="togglePassword()">👁️</span>
             </div>
 
-            <button type="submit">Login</button>
+            <!-- TOTP Code Input (hidden by default) -->
+            <div id="totpSection" style="display: none;">
+                <input type="text" id="totpCode" placeholder="Enter 6-digit code from your authenticator app" maxlength="6" pattern="[0-9]{6}">
+                <small style="color: #666; display: block; margin-top: 5px;">
+                    Open your authenticator app and enter the 6-digit code
+                </small>
+            </div>
+
+            <button type="submit" id="loginButton">Login</button>
         </form>
 
         <div class="register-link">

@@ -43,7 +43,9 @@ class FinancialChatbot:
     """Main chatbot class for financial assistance"""
     
     def __init__(self):
+        # Per-user conversation context: {user_id: {current_topic, last_response_type, conversation_state}}
         self.user_context = {}
+        # Global chat history for fallback
         self.chat_history = []
     
     def get_user_financial_data(self, user_id):
@@ -178,14 +180,23 @@ class FinancialChatbot:
             'user_id': 'demo_user'
         }
     
-    def analyze_spending_patterns(self, financial_data):
+    def analyze_spending_patterns(self, financial_data, is_followup=False):
         """Analyze user's spending patterns from real database data"""
         spending_data = financial_data.get('spending_by_category', [])
         expenses = financial_data.get('expenses', [])
         transactions = financial_data.get('transactions', [])
         
         if not spending_data and not expenses:
-            return "No spending data available for analysis. Start adding expenses to get insights!"
+            greeting = "I'd love to help you analyze your spending, but " if not is_followup else "Unfortunately, "
+            return f"""{greeting}I don't see any spending data available yet. 
+
+To get started, try adding some expenses in the Expenses section. Once you have some data, I can help you:
+• Identify your top spending categories
+• Track monthly spending trends
+• Suggest areas to cut back
+• Create a personalized budget
+
+Would you like tips on how to track expenses effectively?"""
         
         # Calculate total spending from expenses
         total_spent = sum(item['total_amount'] for item in spending_data) if spending_data else 0
@@ -193,17 +204,20 @@ class FinancialChatbot:
         # Get recent expenses for detailed analysis
         recent_expenses = expenses[:10] if expenses else []
         
-        analysis = f"""**📊 Spending Analysis Summary:**
+        greeting = "Great! Let me analyze your spending patterns. " if not is_followup else "Looking at your spending data, "
+        
+        analysis = f"""{greeting}Here's what I found:
 
-💰 **Monthly Spending:** ₹{total_spent:,}
-📈 **Total Expenses:** {len(expenses)} transactions
-💳 **Total Transactions:** {len(transactions)} transactions
+**📊 Spending Overview:**
+💰 Monthly Spending: ₹{total_spent:,}
+📈 Total Expenses: {len(expenses)} transactions
+💳 Total Transactions: {len(transactions)} transactions
 
 """
         
         if spending_data:
             top_category = max(spending_data, key=lambda x: x['total_amount'])
-            analysis += f"🏆 **Top Spending Category:** {top_category['category']} (₹{top_category['total_amount']:,})\n\n"
+            analysis += f"🏆 **Your top spending category is {top_category['category']}** at ₹{top_category['total_amount']:,}.\n\n"
             
             analysis += "**📋 Category Breakdown:**\n"
             for item in spending_data[:5]:
@@ -211,13 +225,19 @@ class FinancialChatbot:
                 analysis += f"• {item['category']}: ₹{item['total_amount']:,} ({percentage:.1f}%)\n"
         
         if recent_expenses:
-            analysis += f"\n**📝 Recent Expenses:**\n"
+            analysis += f"\n**📝 Your Recent Expenses:**\n"
             for i, expense in enumerate(recent_expenses[:5], 1):
                 analysis += f"{i}. {expense['title']} - ₹{expense['amount']:,} ({expense.get('category', 'Other')})\n"
         
+        # Add follow-up suggestions
+        analysis += "\n\n💡 **What would you like to know more about?**\n"
+        analysis += "• How to reduce spending in specific categories\n"
+        analysis += "• Tips to improve your savings rate\n"
+        analysis += "• Creating a monthly budget plan"
+        
         return analysis.strip()
     
-    def get_savings_recommendations(self, financial_data):
+    def get_savings_recommendations(self, financial_data, is_followup=False):
         """Provide savings recommendations based on spending patterns"""
         spending_data = financial_data.get('spending_by_category', [])
         accounts = financial_data.get('accounts', [])
@@ -227,40 +247,48 @@ class FinancialChatbot:
         total_expenses = 0
         
         for account in accounts:
-            if account['account_type'] == 'Savings':
-                total_income += account['balance']
+            account_type = account.get('type', account.get('account_type', '')).lower()
+            if 'savings' in account_type or 'checking' in account_type or 'current' in account_type:
+                total_income += account.get('balance', 0)
         
         for item in spending_data:
-            total_expenses += item['total_amount']
+            total_expenses += item.get('total_amount', 0)
         
         savings_rate = ((total_income - total_expenses) / total_income * 100) if total_income > 0 else 0
+        net_savings = total_income - total_expenses
         
-        recommendations = f"""
-**Savings Analysis:**
-• Current Savings Rate: {savings_rate:.1f}%
+        greeting = "Let me analyze your savings situation. " if not is_followup else "Based on your financial data, "
+        
+        recommendations = f"""{greeting}Here's your savings analysis:
+
+**💰 Current Financial Status:**
+• Savings Rate: {savings_rate:.1f}%
 • Monthly Income: ₹{total_income:,}
 • Monthly Expenses: ₹{total_expenses:,}
-• Net Savings: ₹{total_income - total_expenses:,}
+• Net Savings: ₹{net_savings:,}
 
-**Recommendations:**
 """
         
         if savings_rate < 20:
-            recommendations += """
-1. **Increase Savings Rate** - Aim for at least 20% of income
-2. **Track Daily Expenses** - Use our expense tracker
-3. **Set Up Automatic Transfers** - Automate savings
-4. **Reduce Discretionary Spending** - Cut back on entertainment/shopping
-5. **Create Emergency Fund** - Save 3-6 months of expenses
-"""
+            recommendations += """**💡 Recommendations to Improve Your Savings:**
+
+1. **Aim for 20% Savings Rate** - Start by saving at least 20% of your income
+2. **Track Daily Expenses** - Use our expense tracker to identify unnecessary spending
+3. **Automate Savings** - Set up automatic transfers to a separate savings account
+4. **Reduce Discretionary Spending** - Look for ways to cut back on entertainment and shopping
+5. **Build Emergency Fund** - Save 3-6 months of expenses for unexpected situations
+
+Would you like specific tips on any of these areas?"""
         else:
-            recommendations += """
-1. **Great Job!** - You're saving well
-2. **Consider Investments** - Put excess savings to work
-3. **Diversify Portfolio** - Mix of equity, debt, and gold
-4. **Tax-Saving Investments** - ELSS funds for tax benefits
-5. **Long-term Goals** - Plan for retirement and major purchases
-"""
+            recommendations += """**🎉 Great job on your savings!** You're doing well. Here's how to take it further:
+
+1. **Consider Investments** - Put your excess savings to work and grow your wealth
+2. **Diversify Your Portfolio** - Mix of equity, debt, and gold for balanced growth
+3. **Tax-Saving Investments** - Explore ELSS funds for tax benefits
+4. **Plan Long-term Goals** - Think about retirement and major life purchases
+5. **Review Regularly** - Check your progress monthly and adjust as needed
+
+Would you like investment recommendations tailored to your profile?"""
         
         return recommendations.strip()
     
@@ -333,42 +361,56 @@ class FinancialChatbot:
         
         return response.strip()
     
-    def get_recent_transactions_analysis(self, financial_data):
+    def get_recent_transactions_analysis(self, financial_data, is_followup=False):
         """Analyze recent transactions"""
         transactions = financial_data.get('transactions', [])
         if not transactions:
-            return "No recent transactions found. Start by adding some transactions to get insights!"
+            greeting = "I'd like to show you your recent transactions, but " if not is_followup else "Unfortunately, "
+            return f"""{greeting}I don't see any transactions in your account yet.
+
+To get started, try adding some transactions in the Transactions section. Once you have some data, I can help you:
+• Track your income and expenses
+• Identify spending patterns
+• Monitor your financial activity
+• Analyze cash flow
+
+Would you like help getting started with tracking transactions?"""
         
         # Analyze recent transactions
-        total_credits = sum(t['amount'] for t in transactions if t['type'] == 'Credit')
-        total_debits = sum(t['amount'] for t in transactions if t['type'] == 'Debit')
+        total_credits = sum(t.get('amount', 0) for t in transactions if t.get('type', '').lower() == 'credit')
+        total_debits = sum(t.get('amount', 0) for t in transactions if t.get('type', '').lower() == 'debit')
         
         # Get top spending categories
-        debit_transactions = [t for t in transactions if t['type'] == 'Debit']
+        debit_transactions = [t for t in transactions if t.get('type', '').lower() == 'debit']
         category_spending = {}
         for t in debit_transactions:
             category = t.get('category', 'Other')
-            category_spending[category] = category_spending.get(category, 0) + t['amount']
+            category_spending[category] = category_spending.get(category, 0) + t.get('amount', 0)
         
         top_category = max(category_spending.items(), key=lambda x: x[1]) if category_spending else None
         
-        analysis = f"""**Recent Transactions Analysis:**
+        greeting = "Here's a look at your recent transactions. " if not is_followup else "Looking at your transaction history, "
         
-📊 **Summary:**
+        analysis = f"""{greeting}Here's what I found:
+
+📊 **Transaction Summary:**
 • Total Credits: ₹{total_credits:,}
 • Total Debits: ₹{total_debits:,}
 • Net Flow: ₹{total_credits - total_debits:,}
-• Number of Transactions: {len(transactions)}
+• Total Transactions: {len(transactions)}
 
 """
         
         if top_category:
-            analysis += f"💸 **Top Spending Category:** {top_category[0]} (₹{top_category[1]:,})\n\n"
+            analysis += f"💸 **Your top spending category is {top_category[0]}** at ₹{top_category[1]:,}.\n\n"
         
-        analysis += "📋 **Recent Activity:**\n"
+        analysis += "📋 **Your Recent Activity:**\n"
         for i, t in enumerate(transactions[:5], 1):
-            icon = "💰" if t['type'] == 'Credit' else "💸"
-            analysis += f"{i}. {icon} {t['description']} - ₹{t['amount']:,} ({t.get('category', 'Other')})\n"
+            icon = "💰" if t.get('type', '').lower() == 'credit' else "💸"
+            title = t.get('title', t.get('description', 'Transaction'))
+            amount = t.get('amount', 0)
+            category = t.get('category', 'Other')
+            analysis += f"{i}. {icon} {title} - ₹{amount:,} ({category})\n"
         
         if len(transactions) > 5:
             analysis += f"\n... and {len(transactions) - 5} more transactions"
@@ -613,30 +655,141 @@ class FinancialChatbot:
         
         return analysis.strip()
     
-    def process_message(self, message, user_id, user_mode='professional', profile_data=None):
-        """Process user message and generate appropriate response"""
-        message_lower = message.lower()
+    def _get_conversation_context(self, user_id, chat_history=None):
+        """Get or initialize conversation context for a user"""
+        if user_id not in self.user_context:
+            self.user_context[user_id] = {
+                'current_topic': None,
+                'last_response_type': None,
+                'conversation_state': 'greeting',  # greeting, active, followup
+                'mentioned_topics': []
+            }
+        return self.user_context[user_id]
+    
+    def _update_context(self, user_id, topic=None, response_type=None, state=None):
+        """Update conversation context"""
+        context = self._get_conversation_context(user_id)
+        if topic:
+            context['current_topic'] = topic
+            if topic not in context['mentioned_topics']:
+                context['mentioned_topics'].append(topic)
+        if response_type:
+            context['last_response_type'] = response_type
+        if state:
+            context['conversation_state'] = state
+    
+    def _detect_followup(self, message_lower, context, chat_history=None):
+        """Detect if the message is a follow-up to previous conversation"""
+        followup_indicators = [
+            'tell me more', 'more about', 'what about', 'how about', 'can you explain',
+            'elaborate', 'details', 'more details', 'go on', 'continue', 'and', 'also',
+            'what else', 'anything else', 'other', 'another', 'yes', 'sure', 'okay', 'ok',
+            'yeah', 'yep', 'please', 'thanks', 'thank you', 'cool', 'nice', 'good',
+            'that\'s helpful', 'helpful', 'what', 'how', 'why', 'when', 'where'
+        ]
         
-        # Store in chat history
-        self.chat_history.append({
-            'user': message,
-            'timestamp': datetime.now().isoformat()
-        })
+        # Check if it's a very short message (likely follow-up)
+        if len(message_lower.split()) <= 3:
+            if any(indicator in message_lower for indicator in followup_indicators):
+                return True
+        
+        # Check if previous topic exists and message is related
+        if context['current_topic']:
+            topic_keywords = {
+                'budget': ['spending', 'expense', 'money', 'category', 'reduce', 'cut'],
+                'savings': ['save', 'saving', 'improve', 'increase', 'tips', 'advice'],
+                'investment': ['invest', 'portfolio', 'mutual', 'fund', 'sip', 'stock'],
+                'stock': ['stock', 'share', 'price', 'buy', 'recommend'],
+                'balance': ['account', 'money', 'fund', 'balance', 'total']
+            }
+            
+            if context['current_topic'] in topic_keywords:
+                if any(keyword in message_lower for keyword in topic_keywords[context['current_topic']]):
+                    return True
+        
+        # Check chat history for context
+        if chat_history and len(chat_history) > 0:
+            # If last message was from bot and current is short, likely follow-up
+            last_msg = chat_history[-1] if isinstance(chat_history[-1], dict) else None
+            if last_msg and last_msg.get('sender') == 'bot' and len(message_lower.split()) <= 5:
+                return True
+        
+        return False
+    
+    def _add_conversational_transition(self, response, topic, context):
+        """Add natural conversational transitions to responses"""
+        transitions = {
+            'budget': "\n\n💬 **Want to dive deeper?** I can help you create a budget plan or suggest ways to reduce spending in specific categories.",
+            'savings': "\n\n💬 **Next steps?** Would you like investment recommendations or tips on building an emergency fund?",
+            'investment': "\n\n💬 **Want to know more?** I can help you with specific investment types, stock recommendations, or portfolio planning.",
+            'stock': "\n\n💬 **Interested in more?** I can provide details on any stock, help with investment strategies, or analyze your portfolio.",
+            'balance': "\n\n💬 **What's next?** I can help you with savings strategies, investment planning, or debt management based on your current balance."
+        }
+        
+        if topic in transitions:
+            response += transitions[topic]
+        
+        return response
+    
+    def process_message(self, message, user_id, user_mode='professional', profile_data=None, chat_history=None):
+        """Process user message and generate appropriate response with conversational flow"""
+        message_lower = message.lower().strip()
+        
+        # Get conversation context
+        context = self._get_conversation_context(user_id, chat_history)
+        is_followup = self._detect_followup(message_lower, context, chat_history)
         
         # Get user's financial data
         financial_data = self.get_user_financial_data(user_id)
         
-        # Route to appropriate handler
-        if any(word in message_lower for word in ['budget', 'spending', 'expense', 'expenses', 'spend', 'money spent']):
-            return self.analyze_spending_patterns(financial_data)
+        # Handle greetings and small talk
+        if any(word in message_lower for word in ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening']):
+            self._update_context(user_id, state='greeting')
+            name = profile_data.get('Name', '') if profile_data else ''
+            greeting = f"Hi{(' ' + name.split()[0]) if name else ''}! " if name else "Hello! "
+            return f"""{greeting}I'm your AI financial assistant. 👋
+
+I'm here to help you understand and improve your finances. I can help you with:
+
+💰 **Budget & Spending** - Analyze where your money goes
+💡 **Savings Strategies** - Tips to save more effectively  
+📈 **Investment Guidance** - Personalized investment advice
+📊 **Stock Recommendations** - Find investment opportunities
+💳 **Financial Planning** - Debt management and planning
+
+What would you like to explore today?"""
         
-        elif any(word in message_lower for word in ['save', 'saving', 'savings', 'save money', 'how to save']):
-            return self.get_savings_recommendations(financial_data)
+        # Handle follow-up questions
+        if is_followup and context['current_topic']:
+            if context['current_topic'] == 'budget':
+                return self.analyze_spending_patterns(financial_data, is_followup=True)
+            elif context['current_topic'] == 'savings':
+                return self.get_savings_recommendations(financial_data, is_followup=True)
+            elif context['current_topic'] == 'investment':
+                advice = self.get_investment_advice(user_mode)
+                return f"Let me share more about investments:\n\n{advice}\n\nWould you like to know about specific investment types or see your current portfolio?"
+            elif context['current_topic'] == 'stock':
+                return "I'd be happy to help with stocks! What price range are you interested in? For example, you can ask 'Show me stocks under 500'."
         
-        elif any(word in message_lower for word in ['invest', 'investment', 'portfolio', 'mutual fund', 'sip']):
-            return self.get_investment_advice(user_mode)
+        # Route to appropriate handler with context tracking
+        if any(word in message_lower for word in ['budget', 'spending', 'expense', 'expenses', 'spend', 'money spent', 'where did my money go']):
+            self._update_context(user_id, topic='budget', response_type='analysis', state='active')
+            response = self.analyze_spending_patterns(financial_data, is_followup)
+            return self._add_conversational_transition(response, 'budget', context)
+        
+        elif any(word in message_lower for word in ['save', 'saving', 'savings', 'save money', 'how to save', 'improve savings']):
+            self._update_context(user_id, topic='savings', response_type='recommendations', state='active')
+            response = self.get_savings_recommendations(financial_data, is_followup)
+            return self._add_conversational_transition(response, 'savings', context)
+        
+        elif any(word in message_lower for word in ['invest', 'investment', 'portfolio', 'mutual fund', 'sip', 'where should i invest']):
+            self._update_context(user_id, topic='investment', response_type='advice', state='active')
+            advice = self.get_investment_advice(user_mode)
+            response = f"{advice}\n\n💬 **Want to see your current investments?** Just ask me to analyze your portfolio!"
+            return response
         
         elif any(word in message_lower for word in ['stock', 'stocks', 'share', 'shares', 'equity']):
+            self._update_context(user_id, topic='stock', response_type='recommendations', state='active')
             # Extract price limit and count from message
             price_match = re.search(r'under\s+(\d+)', message_lower)
             count_match = re.search(r'(\d+)\s+stocks?', message_lower)
@@ -644,78 +797,94 @@ class FinancialChatbot:
             price_limit = int(price_match.group(1)) if price_match else 500
             count = int(count_match.group(1)) if count_match else 10
             
-            return self.get_stock_recommendations(price_limit, count)
+            response = self.get_stock_recommendations(price_limit, count)
+            return f"{response}\n\n💬 **Need more help?** I can provide details on any stock or help with investment strategies!"
         
-        elif any(word in message_lower for word in ['transaction', 'transactions', 'recent', 'history', 'activity']):
-            return self.get_recent_transactions_analysis(financial_data)
+        elif any(word in message_lower for word in ['transaction', 'transactions', 'recent', 'history', 'activity', 'what did i buy']):
+            self._update_context(user_id, topic='transactions', response_type='analysis', state='active')
+            response = self.get_recent_transactions_analysis(financial_data, is_followup)
+            return f"{response}\n\n💬 **Want to analyze your spending patterns?** Just ask me about your budget!"
         
-        elif any(word in message_lower for word in ['balance', 'account', 'accounts', 'money', 'funds']):
-            return self.get_account_balance_analysis(financial_data)
+        elif any(word in message_lower for word in ['balance', 'account', 'accounts', 'money', 'funds', 'how much do i have']):
+            self._update_context(user_id, topic='balance', response_type='analysis', state='active')
+            response = self.get_account_balance_analysis(financial_data)
+            return self._add_conversational_transition(response, 'balance', context)
         
-        elif any(word in message_lower for word in ['investment', 'investments', 'portfolio', 'mutual fund', 'fd', 'fixed deposit']):
-            return self.get_investment_analysis(financial_data)
-        
-        elif any(word in message_lower for word in ['loan', 'loans', 'debt', 'borrow']):
-            return self.get_loan_analysis(financial_data)
+        elif any(word in message_lower for word in ['loan', 'loans', 'debt', 'borrow', 'how much do i owe']):
+            self._update_context(user_id, topic='loans', response_type='analysis', state='active')
+            response = self.get_loan_analysis(financial_data)
+            return f"{response}\n\n💬 **Want help managing debt?** I can suggest strategies to pay off loans faster!"
         
         elif any(word in message_lower for word in ['insurance', 'policy', 'premium', 'coverage']):
-            return self.get_insurance_analysis(financial_data)
+            self._update_context(user_id, topic='insurance', response_type='analysis', state='active')
+            response = self.get_insurance_analysis(financial_data)
+            return f"{response}\n\n💬 **Have questions about insurance?** I can help you understand coverage needs or compare policies!"
         
         elif any(word in message_lower for word in ['card', 'cards', 'credit card', 'debit card']):
-            return self.get_card_analysis(financial_data)
+            self._update_context(user_id, topic='cards', response_type='analysis', state='active')
+            response = self.get_card_analysis(financial_data)
+            return f"{response}\n\n💬 **Want credit card tips?** I can help with managing credit utilization and maximizing rewards!"
         
-        elif any(word in message_lower for word in ['hello', 'hi', 'hey']):
-            return f"""Hello! I'm your AI financial assistant. I can help you with:
+        elif any(word in message_lower for word in ['help', 'what can you do', 'what do you do', 'capabilities']):
+            self._update_context(user_id, state='help')
+            return """I'm your financial assistant, and I'm here to help you make better financial decisions! 💪
 
-💰 **Budget Analysis** - Review your spending patterns
-💡 **Savings Tips** - Get personalized savings advice  
-📈 **Investment Guidance** - Learn about investment options
-📊 **Stock Recommendations** - Find stocks under specific prices
-💳 **Debt Management** - Get debt reduction strategies
+**Here's what I can help with:**
 
-What would you like to know about your finances?"""
-        
-        elif any(word in message_lower for word in ['help', 'what can you do']):
-            return """I can help you with various financial topics:
-
-**Budget & Spending:**
-• Analyze your spending patterns
+📊 **Budget & Spending Analysis**
+• Analyze where your money goes
 • Identify top spending categories
-• Provide budget recommendations
+• Suggest areas to cut back
 
-**Savings & Investments:**
+💰 **Savings & Financial Health**
 • Calculate your savings rate
-• Suggest investment strategies
-• Recommend mutual funds and stocks
+• Provide personalized savings tips
+• Help build emergency funds
 
-**Financial Planning:**
-• Emergency fund planning
-• Tax-saving investments
-• Retirement planning basics
+📈 **Investment Guidance**
+• Investment strategies for your profile
+• Portfolio recommendations
+• Stock suggestions under specific prices
 
-**Stock Market:**
-• Find stocks under specific prices
-• Get basic stock information
-• Market insights
+💳 **Financial Planning**
+• Debt management strategies
+• Account balance analysis
+• Insurance and card management
 
-Just ask me about any of these topics!"""
+**Just ask naturally!** For example:
+• "How can I save more money?"
+• "Analyze my spending"
+• "Show me stocks under 500"
+• "What's my account balance?"
+
+What would you like to explore?"""
+        
+        elif any(word in message_lower for word in ['thank', 'thanks', 'appreciate', 'grateful']):
+            self._update_context(user_id, state='active')
+            return """You're very welcome! 😊
+
+I'm always here to help with your financial questions. Feel free to ask me anything about:
+• Your budget and spending
+• Savings strategies
+• Investment advice
+• Stock recommendations
+• Or any other financial topic!
+
+Is there anything else you'd like to know?"""
         
         else:
-            return """I'm here to help with your financial questions! You can ask me about:
+            # Handle ambiguous queries with clarifying questions
+            self._update_context(user_id, state='active')
+            return """I'd love to help! Could you tell me a bit more about what you're looking for? 🤔
 
-• Your budget and spending analysis
-• Savings tips and strategies
-• Investment recommendations
-• Stock suggestions under specific prices
-• Debt management advice
+For example, you could ask:
+• **"Analyze my budget"** - to see your spending patterns
+• **"How can I save more?"** - for savings tips
+• **"Show me stocks under 500"** - for stock recommendations
+• **"What's my account balance?"** - to check your finances
+• **"Investment advice"** - for investment guidance
 
-Try asking something like:
-- "Analyze my budget"
-- "How can I save more money?"
-- "Show me stocks under 500"
-- "Investment advice for students"
-
-What would you like to know?"""
+Or just tell me what financial topic you're interested in, and I'll help you out!"""
 
 # Initialize chatbot instance
 chatbot = FinancialChatbot()
@@ -736,8 +905,17 @@ def chatbot_response():
         if not user_message:
             return jsonify({"response": "Please provide a message."}), 400
         
-        # Get response from chatbot
-        response = chatbot.process_message(user_message, user_id, user_mode, profile_data)
+        # Get chat history from request
+        chat_history = data.get('chat_history', [])
+        
+        # Get response from chatbot with conversation context
+        response = chatbot.process_message(
+            user_message, 
+            user_id, 
+            user_mode, 
+            profile_data,
+            chat_history=chat_history
+        )
         
         return jsonify({"response": response}), 200
         
