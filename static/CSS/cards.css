@@ -465,7 +465,7 @@
 @media (max-width: 768px) {
   .cards-container {
     margin-left: 0; /* Remove sidebar margin on mobile */
-    padding: 15px;
+    padding: 20px; /* Keep static padding */
   }
   
   .page-header h1 {

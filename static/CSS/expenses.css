@@ -261,7 +261,7 @@
 @media (max-width: 768px) {
   .expenses-container {
     margin-left: 0; /* Remove sidebar margin on mobile */
-    padding: 15px;
+    padding: 20px; /* Keep static padding */
   }
   
   .page-header {
@@ -281,7 +281,7 @@
   }
   
   .expenses-section {
-    padding: 15px;
+    padding: 25px; /* Keep static padding */
   }
   
   .section-header h2 {

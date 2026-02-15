@@ -941,7 +941,7 @@ body {
 @media (max-width: 768px) {
   .sidebar {
     width: 60px;
-    padding: 15px 8px;
+    padding: 20px 14px; /* Keep static padding */
   }
   
   .sidebar .username,
@@ -951,6 +951,11 @@ body {
   
   .dashboard {
     margin-left: 80px; /* Moved closer to sidebar on mobile too */
+    padding-top: 20px; /* Keep static padding */
+  }
+  
+  .dashboard-grid {
+    padding: 30px; /* Keep static padding */
   }
 }
 
