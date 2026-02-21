@@ -2,19 +2,24 @@ document.addEventListener("DOMContentLoaded", () => {
   // ----- Registration -----
   const registerForm = document.getElementById("registerForm");
   if (registerForm) {
+    const regPhone = document.getElementById("phone");
+    if (regPhone) regPhone.addEventListener("input", function() { this.value = this.value.replace(/\D/g, "").slice(0, 15); });
     registerForm.addEventListener("submit", async (e) => {
       e.preventDefault();
 
       const fullName = document.getElementById("username").value.trim();
       const username = fullName.toLowerCase().replace(/\s+/g, "");
 
+      const countryCodeEl = document.getElementById("countryCode");
+      const phoneEl = document.getElementById("phone");
+      const phoneVal = phoneEl ? (countryCodeEl ? countryCodeEl.value : "") + (phoneEl.value || "").replace(/\D/g, "") : "";
       const data = {
         username,
         email: document.getElementById("email").value.trim(),
         password: document.getElementById("password").value,
         status: document.getElementById("status").value,
         dob: document.getElementById("dob").value,
-        phone: document.getElementById("phone").value.trim(),
+        phone: phoneVal || (phoneEl ? phoneEl.value.trim() : ""),
         profession: document.getElementById("profession").value
       };
 
@@ -26,11 +31,18 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         const result = await res.json();
-        alert(result.message);
-        if (res.status === 201) window.location.href = "/login_page";
+        if (res.status === 201) {
+          alert(result.message || "Registration successful!");
+          window.location.href = "/login_page";
+        } else {
+          // Show the actual error message from server
+          alert(result.message || "Registration failed. Please check your information and try again.");
+        }
       } catch (err) {
-        alert("Registration failed. Please try again.");
-        console.error(err);
+        // Show actual error if available
+        const errorMsg = err.message || "Network error. Please check your connection and try again.";
+        alert(`Registration failed: ${errorMsg}`);
+        console.error("Registration error:", err);
       }
     });
   }
@@ -78,12 +90,14 @@ if (loginForm) {
         }
       }
 
-      // Show error message
+      // Show the actual error message from server
       alert(result.message || "Login failed. Please check your credentials.");
       
     } catch (err) {
-      alert("Login failed. Please check your credentials.");
-      console.error(err);
+      // Show actual error if available
+      const errorMsg = err.message || "Network error. Please check your connection and try again.";
+      alert(`Login failed: ${errorMsg}`);
+      console.error("Login error:", err);
     }
   });
 }
@@ -142,18 +156,19 @@ if (profileSection) {
     if (!user || !user.username) {
       window.location.href = "/login_page";
     } else {
-      // Fill in profile fields
-      document.getElementById("profileName").textContent = user.username;
-      document.getElementById("profileEmail").textContent = user.email;
-      document.getElementById("profileStatus").textContent = user.status;
-      document.getElementById("profileDOB").textContent = new Date(user.dob).toDateString();
-      document.getElementById("profilePhone").textContent = user.phone;
-      document.getElementById("profileProfession").textContent = user.profession;
+      // Fill in profile fields (handle null/undefined)
+      const formatDate = (d) => { if (!d) return '—'; try { return new Date(d).toLocaleDateString(); } catch (_) { return d || '—'; } };
+      document.getElementById("profileName").textContent = user.username || '—';
+      document.getElementById("profileEmail").textContent = user.email || '—';
+      document.getElementById("profileStatus").textContent = user.status || '—';
+      document.getElementById("profileDOB").textContent = formatDate(user.dob);
+      document.getElementById("profilePhone").textContent = user.phone || '—';
+      document.getElementById("profileProfession").textContent = user.profession || '—';
 
       // Personalized greeting
       const header = document.getElementById("profileNameHeader");
       if (header) {
-        header.textContent = user.username;
+        header.textContent = user.username || 'User';
       }
     }
   } catch (err) {

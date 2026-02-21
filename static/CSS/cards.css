@@ -27,33 +27,35 @@
    Page Layout
    =========================== */
 .cards-container {
-  margin-left: 200px; /* Account for fixed sidebar */
-  padding: 20px;
-  min-height: 100vh;
+  margin-left: 200px;
+  padding: 14px 18px;
+  height: 100vh;
+  max-height: 100vh;
+  overflow-y: auto;
   background: transparent;
 }
 
 /* ===========================
    Page Header
    =========================== */
-.page-header {
+.cards-container .page-header {
   text-align: center;
-  margin-bottom: 30px;
-  padding: 20px;
+  margin-bottom: 16px;
+  padding: 14px 18px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 15px;
+  border-radius: 12px;
   color: white;
 }
 
-.page-header h1 {
-  margin: 0 0 10px 0;
-  font-size: 2.5rem;
+.cards-container .page-header h1 {
+  margin: 0 0 6px 0;
+  font-size: 1.75rem;
   font-weight: 700;
 }
 
-.page-header p {
+.cards-container .page-header p {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   opacity: 0.9;
 }
 
@@ -63,14 +65,14 @@
 .cards-overview {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
-  margin-bottom: 30px;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
-.overview-card {
+.cards-container .overview-card {
   background: white;
-  padding: 25px;
-  border-radius: 15px;
+  padding: 14px 18px;
+  border-radius: 12px;
   text-align: center;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
   transition: transform 0.3s ease;
@@ -99,18 +101,18 @@
 /* ===========================
    Section Header
    =========================== */
-.section-header {
+.cards-container .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 25px;
-  padding: 0 10px;
+  margin-bottom: 14px;
+  padding: 0 6px;
 }
 
-.section-header h2 {
+.cards-container .section-header h2 {
   margin: 0;
   color: #2c3e50;
-  font-size: 1.8rem;
+  font-size: 1.4rem;
   font-weight: 600;
 }
 
@@ -137,8 +139,8 @@
    =========================== */
 .cards-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
 }
 
 /* ===========================
@@ -146,8 +148,8 @@
    =========================== */
 .card-item {
   background: white;
-  border-radius: 15px;
-  padding: 25px;
+  border-radius: 12px;
+  padding: 14px 18px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
   position: relative;

@@ -9,11 +9,57 @@ import numpy as np
 import yfinance as yf
 import re
 import os
+import random
 from datetime import datetime, timedelta
 import json
 
 # Create blueprint
 chatbot_bp = Blueprint('chatbot', __name__)
+
+# --- Human-like conversation phrases (Turing-style naturalness) ---
+ACKNOWLEDGMENTS = [
+    "Good question! ",
+    "So you're asking about that — ",
+    "Yeah, so ",
+    "Sure — ",
+    "Okay, so ",
+    "Right, so ",
+    "So basically ",
+    "Honestly? ",
+    "The short answer is ",
+    "Here's the thing: ",
+    "",
+]
+CLOSINGS = [
+    " Does that help?",
+    " Want me to go deeper on any of this?",
+    " Let me know if you want more detail.",
+    " If you want to dig into something specific, just ask.",
+    " Anything else on your mind about this?",
+    "",
+]
+GREETING_VARIANTS = [
+    "Hey! Good to see you. ",
+    "Hi there! ",
+    "Hello! ",
+    "Hey — ",
+]
+HELP_OPENERS = [
+    "So basically I'm here to help with your money — ",
+    "I'm your finance buddy, basically. ",
+    "Think of me as a friend who's good with numbers. ",
+]
+THANKS_RESPONSES = [
+    "You're welcome! Happy to help.",
+    "Anytime!",
+    "No problem at all.",
+    "Glad I could help!",
+]
+CLARIFY_OPENERS = [
+    "I'd love to help — can you give me a bit more to go on? ",
+    "Sure, just need a bit more detail. ",
+    "Could you narrow it down a bit? ",
+]
 
 # Financial categories and their icons
 FINANCIAL_CATEGORIES = {
@@ -187,54 +233,34 @@ class FinancialChatbot:
         transactions = financial_data.get('transactions', [])
         
         if not spending_data and not expenses:
-            greeting = "I'd love to help you analyze your spending, but " if not is_followup else "Unfortunately, "
-            return f"""{greeting}I don't see any spending data available yet. 
-
-To get started, try adding some expenses in the Expenses section. Once you have some data, I can help you:
-• Identify your top spending categories
-• Track monthly spending trends
-• Suggest areas to cut back
-• Create a personalized budget
-
-Would you like tips on how to track expenses effectively?"""
+            lead = "I don't see any spending data yet." if not is_followup else "Still no spending data on file."
+            return f"""{lead} Once you add some expenses in the Expenses section, I can help you see where your money goes, spot top categories, and suggest where to cut back. Want tips on tracking expenses?"""
         
-        # Calculate total spending from expenses
         total_spent = sum(item['total_amount'] for item in spending_data) if spending_data else 0
-        
-        # Get recent expenses for detailed analysis
         recent_expenses = expenses[:10] if expenses else []
         
-        greeting = "Great! Let me analyze your spending patterns. " if not is_followup else "Looking at your spending data, "
-        
-        analysis = f"""{greeting}Here's what I found:
-
-**📊 Spending Overview:**
-💰 Monthly Spending: ₹{total_spent:,}
-📈 Total Expenses: {len(expenses)} transactions
-💳 Total Transactions: {len(transactions)} transactions
-
-"""
-        
+        # Lead with the direct answer
         if spending_data:
             top_category = max(spending_data, key=lambda x: x['total_amount'])
-            analysis += f"🏆 **Your top spending category is {top_category['category']}** at ₹{top_category['total_amount']:,}.\n\n"
-            
-            analysis += "**📋 Category Breakdown:**\n"
+            lead = f"So you're spending about ₹{total_spent:,} this month — most of it goes to **{top_category['category']}** (₹{top_category['total_amount']:,})."
+        else:
+            lead = f"You've got {len(expenses)} expenses logged; total around ₹{total_spent:,}."
+        
+        analysis = lead + "\n\n"
+        analysis += f"**Quick numbers:** Monthly spending ₹{total_spent:,}, {len(expenses)} expenses, {len(transactions)} transactions.\n\n"
+        
+        if spending_data:
+            analysis += "**By category:**\n"
             for item in spending_data[:5]:
-                percentage = (item['total_amount'] / total_spent) * 100 if total_spent > 0 else 0
-                analysis += f"• {item['category']}: ₹{item['total_amount']:,} ({percentage:.1f}%)\n"
+                pct = (item['total_amount'] / total_spent) * 100 if total_spent > 0 else 0
+                analysis += f"• {item['category']}: ₹{item['total_amount']:,} ({pct:.1f}%)\n"
         
         if recent_expenses:
-            analysis += f"\n**📝 Your Recent Expenses:**\n"
+            analysis += "\n**Recent stuff:**\n"
             for i, expense in enumerate(recent_expenses[:5], 1):
-                analysis += f"{i}. {expense['title']} - ₹{expense['amount']:,} ({expense.get('category', 'Other')})\n"
+                analysis += f"{i}. {expense['title']} — ₹{expense['amount']:,} ({expense.get('category', 'Other')})\n"
         
-        # Add follow-up suggestions
-        analysis += "\n\n💡 **What would you like to know more about?**\n"
-        analysis += "• How to reduce spending in specific categories\n"
-        analysis += "• Tips to improve your savings rate\n"
-        analysis += "• Creating a monthly budget plan"
-        
+        analysis += "\nI can suggest where to cut back or help with a budget plan if you want."
         return analysis.strip()
     
     def get_savings_recommendations(self, financial_data, is_followup=False):
@@ -257,38 +283,13 @@ Would you like tips on how to track expenses effectively?"""
         savings_rate = ((total_income - total_expenses) / total_income * 100) if total_income > 0 else 0
         net_savings = total_income - total_expenses
         
-        greeting = "Let me analyze your savings situation. " if not is_followup else "Based on your financial data, "
-        
-        recommendations = f"""{greeting}Here's your savings analysis:
-
-**💰 Current Financial Status:**
-• Savings Rate: {savings_rate:.1f}%
-• Monthly Income: ₹{total_income:,}
-• Monthly Expenses: ₹{total_expenses:,}
-• Net Savings: ₹{net_savings:,}
-
-"""
+        # Answer first: rate and net
+        recommendations = f"So your savings rate is around {savings_rate:.1f}% — income ₹{total_income:,}, expenses ₹{total_expenses:,}, so you're left with about ₹{net_savings:,}.\n\n"
         
         if savings_rate < 20:
-            recommendations += """**💡 Recommendations to Improve Your Savings:**
-
-1. **Aim for 20% Savings Rate** - Start by saving at least 20% of your income
-2. **Track Daily Expenses** - Use our expense tracker to identify unnecessary spending
-3. **Automate Savings** - Set up automatic transfers to a separate savings account
-4. **Reduce Discretionary Spending** - Look for ways to cut back on entertainment and shopping
-5. **Build Emergency Fund** - Save 3-6 months of expenses for unexpected situations
-
-Would you like specific tips on any of these areas?"""
+            recommendations += """**What I'd do:** Try to get to at least 20% savings. Track daily expenses so you see where it goes, automate a transfer to savings so you don't have to think about it, and cut back a bit on fun stuff if you can. Building 3–6 months of expenses as an emergency fund is a solid next step. Want tips on any of these?"""
         else:
-            recommendations += """**🎉 Great job on your savings!** You're doing well. Here's how to take it further:
-
-1. **Consider Investments** - Put your excess savings to work and grow your wealth
-2. **Diversify Your Portfolio** - Mix of equity, debt, and gold for balanced growth
-3. **Tax-Saving Investments** - Explore ELSS funds for tax benefits
-4. **Plan Long-term Goals** - Think about retirement and major life purchases
-5. **Review Regularly** - Check your progress monthly and adjust as needed
-
-Would you like investment recommendations tailored to your profile?"""
+            recommendations += """**You're doing well.** Next I'd think about putting that extra to work — investments, maybe a mix of equity and debt, and tax-saving stuff like ELSS. We can go through options for your profile if you want."""
         
         return recommendations.strip()
     
@@ -719,16 +720,44 @@ Would you like help getting started with tracking transactions?"""
     def _add_conversational_transition(self, response, topic, context):
         """Add natural conversational transitions to responses"""
         transitions = {
-            'budget': "\n\n💬 **Want to dive deeper?** I can help you create a budget plan or suggest ways to reduce spending in specific categories.",
-            'savings': "\n\n💬 **Next steps?** Would you like investment recommendations or tips on building an emergency fund?",
-            'investment': "\n\n💬 **Want to know more?** I can help you with specific investment types, stock recommendations, or portfolio planning.",
-            'stock': "\n\n💬 **Interested in more?** I can provide details on any stock, help with investment strategies, or analyze your portfolio.",
-            'balance': "\n\n💬 **What's next?** I can help you with savings strategies, investment planning, or debt management based on your current balance."
+            'budget': "\n\nWant to dive deeper? I can help with a budget plan or cutting spending in specific areas.",
+            'savings': "\n\nWant to talk investments or building an emergency fund next?",
+            'investment': "\n\nI can go into specific investment types or stocks, or look at your portfolio.",
+            'stock': "\n\nI can give more detail on any of these or help with strategy.",
+            'balance': "\n\nWe could look at savings next, or investments, or debt — up to you."
         }
-        
         if topic in transitions:
             response += transitions[topic]
-        
+        return response
+
+    def _humanize(self, response, topic=None, is_greeting=False, is_thanks=False, is_help=False, is_clarify=False):
+        """Make the bot sound more human: varied openers, direct tone, natural closings."""
+        if not response or len(response) < 10:
+            return response
+        # Don't double-wrap if we already have a strong opener
+        first_lower = response[:60].lower()
+        skip_opener = any(x in first_lower for x in [
+            "good question", "so you're", "yeah so", "sure —", "okay so", "here's the thing",
+            "honestly", "the short answer", "hey!", "hi there", "hello!", "you're welcome",
+            "anytime", "no problem", "glad i could", "i'd love to help"
+        ])
+        if not skip_opener:
+            opener = random.choice(ACKNOWLEDGMENTS)
+            if is_greeting and GREETING_VARIANTS:
+                opener = random.choice(GREETING_VARIANTS)
+            elif is_thanks and THANKS_RESPONSES:
+                return random.choice(THANKS_RESPONSES) + " " + response
+            elif is_help and HELP_OPENERS:
+                opener = random.choice(HELP_OPENERS)
+            elif is_clarify and CLARIFY_OPENERS:
+                opener = random.choice(CLARIFY_OPENERS)
+            if opener:
+                response = opener + response.lstrip()
+        # Add a natural closing sometimes (not for very long or list-heavy replies)
+        if topic and random.random() < 0.5 and response.count("\n") < 12:
+            closing = random.choice(CLOSINGS)
+            if closing and not response.strip().endswith("?"):
+                response = response.rstrip() + closing
         return response
     
     def process_message(self, message, user_id, user_mode='professional', profile_data=None, chat_history=None):
@@ -745,146 +774,126 @@ Would you like help getting started with tracking transactions?"""
         # Handle greetings and small talk
         if any(word in message_lower for word in ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening']):
             self._update_context(user_id, state='greeting')
-            name = profile_data.get('Name', '') if profile_data else ''
-            greeting = f"Hi{(' ' + name.split()[0]) if name else ''}! " if name else "Hello! "
-            return f"""{greeting}I'm your AI financial assistant. 👋
-
-I'm here to help you understand and improve your finances. I can help you with:
-
-💰 **Budget & Spending** - Analyze where your money goes
-💡 **Savings Strategies** - Tips to save more effectively  
-📈 **Investment Guidance** - Personalized investment advice
-📊 **Stock Recommendations** - Find investment opportunities
-💳 **Financial Planning** - Debt management and planning
-
-What would you like to explore today?"""
+            name = (profile_data.get('Name', '') or '').strip() if profile_data else ''
+            first_name = name.split()[0] if name else ''
+            intro = random.choice([
+                "I'm here to help with your finances — think of me as a friend who's good with numbers. ",
+                "I'm your finance sidekick. ",
+                "I help people make sense of their money. "
+            ])
+            body = (
+                f"We can look at stuff like: where your money's going, how to save more, "
+                f"investments, stocks under a certain price, or loans and cards. "
+            )
+            ask = "What do you want to look at first?"
+            full = f"{intro}{body}\n\n{ask}"
+            if first_name:
+                full = f"Hey {first_name}! " + full
+            else:
+                full = random.choice(["Hey! ", "Hi! "]) + full
+            return self._humanize(full, is_greeting=True)
         
         # Handle follow-up questions
         if is_followup and context['current_topic']:
             if context['current_topic'] == 'budget':
-                return self.analyze_spending_patterns(financial_data, is_followup=True)
+                r = self.analyze_spending_patterns(financial_data, is_followup=True)
+                return self._humanize(r, topic='budget')
             elif context['current_topic'] == 'savings':
-                return self.get_savings_recommendations(financial_data, is_followup=True)
+                r = self.get_savings_recommendations(financial_data, is_followup=True)
+                return self._humanize(r, topic='savings')
             elif context['current_topic'] == 'investment':
                 advice = self.get_investment_advice(user_mode)
-                return f"Let me share more about investments:\n\n{advice}\n\nWould you like to know about specific investment types or see your current portfolio?"
+                r = f"Sure, so on investments — here's the deal:\n\n{advice}\n\nWant to talk specific types or your current portfolio?"
+                return self._humanize(r, topic='investment')
             elif context['current_topic'] == 'stock':
-                return "I'd be happy to help with stocks! What price range are you interested in? For example, you can ask 'Show me stocks under 500'."
+                return random.choice([
+                    "Sure — what price range are you thinking? Try something like 'Show me stocks under 500'.",
+                    "Happy to. Just tell me the max price, e.g. 'stocks under 500'.",
+                ])
         
         # Route to appropriate handler with context tracking
         if any(word in message_lower for word in ['budget', 'spending', 'expense', 'expenses', 'spend', 'money spent', 'where did my money go']):
             self._update_context(user_id, topic='budget', response_type='analysis', state='active')
             response = self.analyze_spending_patterns(financial_data, is_followup)
-            return self._add_conversational_transition(response, 'budget', context)
+            response = self._add_conversational_transition(response, 'budget', context)
+            return self._humanize(response, topic='budget')
         
         elif any(word in message_lower for word in ['save', 'saving', 'savings', 'save money', 'how to save', 'improve savings']):
             self._update_context(user_id, topic='savings', response_type='recommendations', state='active')
             response = self.get_savings_recommendations(financial_data, is_followup)
-            return self._add_conversational_transition(response, 'savings', context)
+            response = self._add_conversational_transition(response, 'savings', context)
+            return self._humanize(response, topic='savings')
         
         elif any(word in message_lower for word in ['invest', 'investment', 'portfolio', 'mutual fund', 'sip', 'where should i invest']):
             self._update_context(user_id, topic='investment', response_type='advice', state='active')
             advice = self.get_investment_advice(user_mode)
-            response = f"{advice}\n\n💬 **Want to see your current investments?** Just ask me to analyze your portfolio!"
-            return response
+            response = f"{advice}\n\nWant to see your current investments? Just ask me to look at your portfolio."
+            return self._humanize(response, topic='investment')
         
         elif any(word in message_lower for word in ['stock', 'stocks', 'share', 'shares', 'equity']):
             self._update_context(user_id, topic='stock', response_type='recommendations', state='active')
-            # Extract price limit and count from message
             price_match = re.search(r'under\s+(\d+)', message_lower)
             count_match = re.search(r'(\d+)\s+stocks?', message_lower)
-            
             price_limit = int(price_match.group(1)) if price_match else 500
             count = int(count_match.group(1)) if count_match else 10
-            
             response = self.get_stock_recommendations(price_limit, count)
-            return f"{response}\n\n💬 **Need more help?** I can provide details on any stock or help with investment strategies!"
+            response = response + "\n\nI can go deeper on any of these or help with strategy if you want."
+            return self._humanize(response, topic='stock')
         
         elif any(word in message_lower for word in ['transaction', 'transactions', 'recent', 'history', 'activity', 'what did i buy']):
             self._update_context(user_id, topic='transactions', response_type='analysis', state='active')
             response = self.get_recent_transactions_analysis(financial_data, is_followup)
-            return f"{response}\n\n💬 **Want to analyze your spending patterns?** Just ask me about your budget!"
+            response = response + "\n\nWant to dig into spending patterns? Just ask about your budget."
+            return self._humanize(response, topic='budget')
         
         elif any(word in message_lower for word in ['balance', 'account', 'accounts', 'money', 'funds', 'how much do i have']):
             self._update_context(user_id, topic='balance', response_type='analysis', state='active')
             response = self.get_account_balance_analysis(financial_data)
-            return self._add_conversational_transition(response, 'balance', context)
+            response = self._add_conversational_transition(response, 'balance', context)
+            return self._humanize(response, topic='balance')
         
         elif any(word in message_lower for word in ['loan', 'loans', 'debt', 'borrow', 'how much do i owe']):
             self._update_context(user_id, topic='loans', response_type='analysis', state='active')
             response = self.get_loan_analysis(financial_data)
-            return f"{response}\n\n💬 **Want help managing debt?** I can suggest strategies to pay off loans faster!"
+            response = response + "\n\nWant help with a payoff plan? I can suggest strategies."
+            return self._humanize(response, topic='loans')
         
         elif any(word in message_lower for word in ['insurance', 'policy', 'premium', 'coverage']):
             self._update_context(user_id, topic='insurance', response_type='analysis', state='active')
             response = self.get_insurance_analysis(financial_data)
-            return f"{response}\n\n💬 **Have questions about insurance?** I can help you understand coverage needs or compare policies!"
+            response = response + "\n\nQuestions about coverage or comparing policies? Just ask."
+            return self._humanize(response, topic='insurance')
         
         elif any(word in message_lower for word in ['card', 'cards', 'credit card', 'debit card']):
             self._update_context(user_id, topic='cards', response_type='analysis', state='active')
             response = self.get_card_analysis(financial_data)
-            return f"{response}\n\n💬 **Want credit card tips?** I can help with managing credit utilization and maximizing rewards!"
+            response = response + "\n\nI can help with utilization tips or rewards too."
+            return self._humanize(response, topic='cards')
         
         elif any(word in message_lower for word in ['help', 'what can you do', 'what do you do', 'capabilities']):
             self._update_context(user_id, state='help')
-            return """I'm your financial assistant, and I'm here to help you make better financial decisions! 💪
-
-**Here's what I can help with:**
-
-📊 **Budget & Spending Analysis**
-• Analyze where your money goes
-• Identify top spending categories
-• Suggest areas to cut back
-
-💰 **Savings & Financial Health**
-• Calculate your savings rate
-• Provide personalized savings tips
-• Help build emergency funds
-
-📈 **Investment Guidance**
-• Investment strategies for your profile
-• Portfolio recommendations
-• Stock suggestions under specific prices
-
-💳 **Financial Planning**
-• Debt management strategies
-• Account balance analysis
-• Insurance and card management
-
-**Just ask naturally!** For example:
-• "How can I save more money?"
-• "Analyze my spending"
-• "Show me stocks under 500"
-• "What's my account balance?"
-
-What would you like to explore?"""
+            help_text = (
+                random.choice(HELP_OPENERS)
+                + "I can help with: budget and spending, savings tips, investments, stocks under a price, "
+                "loans, cards, insurance, balance — stuff like that. "
+                "Just ask in your own words, e.g. 'how can I save more?' or 'analyze my spending'. "
+                "What do you want to look at?"
+            )
+            return self._humanize(help_text, is_help=True)
         
         elif any(word in message_lower for word in ['thank', 'thanks', 'appreciate', 'grateful']):
             self._update_context(user_id, state='active')
-            return """You're very welcome! 😊
-
-I'm always here to help with your financial questions. Feel free to ask me anything about:
-• Your budget and spending
-• Savings strategies
-• Investment advice
-• Stock recommendations
-• Or any other financial topic!
-
-Is there anything else you'd like to know?"""
+            return random.choice(THANKS_RESPONSES) + " If you think of anything else, just ask."
         
         else:
-            # Handle ambiguous queries with clarifying questions
             self._update_context(user_id, state='active')
-            return """I'd love to help! Could you tell me a bit more about what you're looking for? 🤔
-
-For example, you could ask:
-• **"Analyze my budget"** - to see your spending patterns
-• **"How can I save more?"** - for savings tips
-• **"Show me stocks under 500"** - for stock recommendations
-• **"What's my account balance?"** - to check your finances
-• **"Investment advice"** - for investment guidance
-
-Or just tell me what financial topic you're interested in, and I'll help you out!"""
+            clarify = (
+                random.choice(CLARIFY_OPENERS)
+                + "For example: 'Analyze my budget', 'How can I save more?', "
+                "'Show me stocks under 500', 'What's my account balance?', or 'Investment advice'. "
+                "What are you curious about?"
+            )
+            return self._humanize(clarify, is_clarify=True)
 
 # Initialize chatbot instance
 chatbot = FinancialChatbot()
@@ -920,7 +929,30 @@ def chatbot_response():
         return jsonify({"response": response}), 200
         
     except Exception as e:
-        return jsonify({"response": f"Sorry, I encountered an error: {str(e)}"}), 500
+        try:
+            from flask import current_app
+            current_app.logger.error("Chatbot error: %s", e, exc_info=True)
+        except Exception:
+            pass
+        return jsonify({"response": "Sorry, something went wrong on my side — can you try again in a sec?"}), 500
+
+
+@chatbot_bp.route('/api/turing_rating', methods=['POST'])
+def turing_rating():
+    """Accept a Turing-test style rating: how human did the chatbot feel? (1-5)"""
+    try:
+        data = request.json or {}
+        rating = data.get('rating')
+        if rating is not None:
+            rating = int(rating)
+            if 1 <= rating <= 5:
+                # Optional: log or store for improvement
+                if current_app and getattr(current_app, 'logger', None):
+                    current_app.logger.info("Turing rating: %s/5", rating)
+        return jsonify({"message": "Thanks for your feedback!", "received": True}), 200
+    except Exception:
+        return jsonify({"message": "Thanks!", "received": True}), 200
+
 
 @chatbot_bp.route('/api/insights', methods=['POST'])
 def get_insights():

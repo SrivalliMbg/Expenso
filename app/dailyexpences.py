@@ -13,10 +13,6 @@ def home():
 def login_page():
     return render_template("login.html")
 
-@main.route("/profile_page")
-def profile_page():
-    return render_template("profile.html")
-
 @main.route("/home")
 def dashboard():
     user = session.get("user")
@@ -55,7 +51,12 @@ def register():
         cursor.close()
         return jsonify({"message": "User registered successfully"}), 201
     except Exception as e:
-        return jsonify({"message": f"Error: {str(e)}"}), 500
+        try:
+            from flask import current_app
+            current_app.logger.error("Error: %s", e, exc_info=True)
+        except Exception:
+            pass
+        return jsonify({"message": "Something went wrong. Please try again later."}), 500
 
 # -------------------- User Login --------------------
 
@@ -78,7 +79,12 @@ def login():
         else:
             return jsonify({"message": "Invalid credentials"}), 401
     except Exception as e:
-        return jsonify({"message": f"Error: {str(e)}"}), 500
+        try:
+            from flask import current_app
+            current_app.logger.error("Error: %s", e, exc_info=True)
+        except Exception:
+            pass
+        return jsonify({"message": "Something went wrong. Please try again later."}), 500
 
 # -------------------- Daily Expense Chart API --------------------
 
@@ -106,7 +112,12 @@ def daily_expenses():
         cursor.close()
         return jsonify(data), 200
     except Exception as e:
-        return jsonify({"message": f"Error: {str(e)}"}), 500
+        try:
+            from flask import current_app
+            current_app.logger.error("Error: %s", e, exc_info=True)
+        except Exception:
+            pass
+        return jsonify({"message": "Something went wrong. Please try again later."}), 500
 
 # -------------------- Logout --------------------
 

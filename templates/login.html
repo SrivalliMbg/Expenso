@@ -30,6 +30,17 @@
             border-color: #007bff;
             box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
         }
+        .forgot-link {
+            margin-top: 12px;
+            font-size: 14px;
+        }
+        .forgot-link a {
+            color: #e3a241;
+            text-decoration: underline;
+        }
+        .forgot-link a:hover {
+            color: #c35206;
+        }
     </style>
 </head>
 <body>
@@ -59,8 +70,12 @@
             <button type="submit" id="loginButton">Login</button>
         </form>
 
+        <div class="forgot-link">
+            <a href="/forgot_credentials_page">Forgot credentials?</a>
+        </div>
+
         <div class="register-link">
-            Don't have an account? <a href="/register_page">Register here</a>
+            Don't have an account? <a href="/register_page" style="color: #e3a241; text-decoration: underline;">Register here</a>
         </div>
     </div>
 </body>

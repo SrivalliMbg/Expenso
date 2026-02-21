@@ -164,6 +164,62 @@ form {
   color: #333;
 }
 
+/* ===== Profile page: fit in viewport ===== */
+.profile-page {
+  align-items: flex-start;
+  padding: 12px 0;
+  overflow-y: auto;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+.profile-page .container.profile-container {
+  max-width: 420px;
+  width: 90%;
+  margin: 0 auto;
+  padding: 20px 24px;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.profile-page .logo-section {
+  margin-bottom: 10px;
+}
+
+.profile-page .logo-img {
+  width: 56px;
+  height: 56px;
+}
+
+.profile-page .container h1 {
+  margin-bottom: 12px;
+  font-size: 1.25rem;
+  line-height: 1.35;
+}
+
+.profile-page .profile-info {
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.profile-page .profile-info div {
+  padding: 10px 12px;
+  font-size: 0.9rem;
+}
+
+.profile-page .totp-field {
+  margin: 8px 0 !important;
+}
+
+.profile-page .edit-profile-btn,
+.profile-page .logout-btn {
+  margin-top: 12px;
+  padding: 10px 18px;
+  font-size: 0.95rem;
+}
+
 /* ===== Accessibility ===== */
 .sr-only {
   position: absolute;

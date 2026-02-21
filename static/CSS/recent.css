@@ -27,33 +27,35 @@
    Page Layout
    =========================== */
 .transactions-container {
-  margin-left: 200px; /* Account for fixed sidebar */
-  padding: 20px;
-  min-height: 100vh;
+  margin-left: 200px;
+  padding: 14px 18px;
+  height: 100vh;
+  max-height: 100vh;
+  overflow-y: auto;
   background: transparent;
 }
 
 /* ===========================
    Page Header
    =========================== */
-.page-header {
+.transactions-container .page-header {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  padding: 25px 30px;
-  border-radius: 15px;
-  margin-bottom: 30px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  margin-bottom: 16px;
   box-shadow: 0 8px 25px rgba(102, 126, 234, 0.2);
 }
 
-.page-header h1 {
-  margin: 0 0 10px 0;
-  font-size: 2.2rem;
+.transactions-container .page-header h1 {
+  margin: 0 0 6px 0;
+  font-size: 1.75rem;
   font-weight: 700;
 }
 
-.page-header p {
+.transactions-container .page-header p {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   opacity: 0.9;
 }
 
@@ -63,14 +65,14 @@
 .transactions-overview {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
-  margin-bottom: 30px;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
-.overview-card {
+.transactions-container .overview-card {
   background: white;
-  padding: 20px;
-  border-radius: 15px;
+  padding: 14px 18px;
+  border-radius: 12px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
   text-align: center;
   transition: transform 0.2s ease;
@@ -98,23 +100,23 @@
    =========================== */
 .transactions-section {
   background: white;
-  padding: 25px;
-  border-radius: 15px;
+  padding: 14px 18px;
+  border-radius: 12px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
 }
 
-.section-header {
+.transactions-container .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 15px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
   border-bottom: 1px solid #eee;
 }
 
-.section-header h2 {
+.transactions-container .section-header h2 {
   margin: 0;
-  font-size: 1.8rem;
+  font-size: 1.4rem;
   color: #2c3e50;
 }
 
@@ -244,11 +246,11 @@
   }
   
   .transactions-section {
-    padding: 25px; /* Keep static padding */
+    padding: 14px 18px;
   }
   
   .section-header h2 {
-    font-size: 1.5rem;
+    font-size: 1.25rem;
   }
   
   .transaction-card {

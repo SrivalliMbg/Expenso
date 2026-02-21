@@ -12,6 +12,54 @@ document.addEventListener('DOMContentLoaded', function() {
     loadDashboardData();
 });
 
+// Status-specific focus content (Student vs Professional)
+const STATUS_FOCUS = {
+    student: {
+        title: "For Students — Focus on",
+        items: [
+            "Track part-time income and study-related expenses",
+            "Build a small emergency fund (even ₹500/month helps)",
+            "Keep subscription and lifestyle spending in check",
+            "Use the AI assistant for simple budget tips"
+        ]
+    },
+    professional: {
+        title: "For Professionals — Focus on",
+        items: [
+            "Monitor savings, investments, and tax-friendly options",
+            "Review insurance and loan obligations regularly",
+            "Plan for retirement and long-term goals",
+            "Use the AI assistant for investment and savings strategies"
+        ]
+    }
+};
+
+function initStatusDisplay(user) {
+    const status = (user && user.status) ? user.status.toLowerCase() : 'professional';
+    const isStudent = status === 'student';
+
+    // Sidebar badge
+    const badge = document.getElementById("sidebarStatusBadge");
+    if (badge) {
+        badge.textContent = isStudent ? "Student" : "Professional";
+        badge.className = "status-badge " + (isStudent ? "student" : "professional");
+        badge.setAttribute("aria-label", isStudent ? "Student account" : "Professional account");
+    }
+
+    // Dashboard "For you" section
+    const section = document.getElementById("statusFocusSection");
+    const titleEl = document.getElementById("statusFocusTitle");
+    const listEl = document.getElementById("statusFocusList");
+    if (section && titleEl && listEl) {
+        const focus = isStudent ? STATUS_FOCUS.student : STATUS_FOCUS.professional;
+        titleEl.textContent = focus.title;
+        section.classList.toggle("student-focus", isStudent);
+        section.classList.toggle("professional-focus", !isStudent);
+        listEl.innerHTML = focus.items.map(item => `<li>${item}</li>`).join("");
+        section.style.display = "block";
+    }
+}
+
 // Dashboard functionality
 function initDashboard() {
     const user = JSON.parse(sessionStorage.getItem("user"));
@@ -21,6 +69,9 @@ function initDashboard() {
         if (sidebarUsername) {
             sidebarUsername.textContent = user.username;
         }
+
+        // Show Student vs Professional badge and focus section
+        initStatusDisplay(user);
         
         // Load initial AI insights
         loadAIInsights();

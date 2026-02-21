@@ -20,6 +20,7 @@
         </div>
         <div class="username-row">
           <span class="username" id="sidebarUsername">{{ username }}</span>
+          <span class="status-badge" id="sidebarStatusBadge" aria-label="Account type"></span>
         </div>
       </div>
       <nav class="menu">
@@ -29,6 +30,7 @@
         <a href="/investments_page">Investments</a>
         <a href="/recent_page">Recent Transactions</a>
         <a href="/expenses_page">Expenses</a>
+        <a href="/ocr_import_page">Import (OCR)</a>
         <a href="/logout_page" class="logout" onclick="return confirmLogout();">Logout</a>
       </nav>
     </aside>
@@ -44,11 +46,17 @@
       return confirm("Are you sure you want to logout?");
     }
 
-    // Populate sidebar with user data
+    // Populate sidebar with user data and status badge
     document.addEventListener("DOMContentLoaded", () => {
       const user = JSON.parse(sessionStorage.getItem("user"));
       if (user) {
         document.getElementById("sidebarUsername").textContent = user.username;
+        const badge = document.getElementById("sidebarStatusBadge");
+        if (badge) {
+          const isStudent = (user.status || "").toLowerCase() === "student";
+          badge.textContent = isStudent ? "Student" : "Professional";
+          badge.className = "status-badge " + (isStudent ? "student" : "professional");
+        }
       } else {
         window.location.href = "/login_page";
       }
