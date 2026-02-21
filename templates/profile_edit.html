@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Edit Profile - Expenso</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .edit-form { max-width: 400px; margin: 0 auto; text-align: left; }
+        .edit-form label { display: block; margin-top: 12px; font-weight: bold; }
+        .edit-form input, .edit-form select { width: 100%; padding: 8px; margin-top: 4px; box-sizing: border-box; }
+        .edit-form .btn-group { margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap; }
+        .edit-form .save-btn { background: #28a745; color: white; padding: 10px 24px; border: none; border-radius: 4px; cursor: pointer; }
+        .edit-form .save-btn:hover { background: #218838; }
+        .edit-form .back-btn { display: inline-block; background: #6c757d; color: white; padding: 10px 24px; border-radius: 4px; text-decoration: none; }
+        .edit-form .back-btn:hover { color: white; background: #5a6268; }
+        .edit-form .msg { margin-top: 10px; padding: 8px; border-radius: 4px; }
+        .edit-form .msg.error { background: #f8d7da; color: #721c24; }
+        .edit-form .msg.success { background: #d4edda; color: #155724; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <img src="{{ url_for('static', filename='images/logo.jpg') }}" alt="Expenso Logo" class="logo-img">
+        <h1>Edit Profile</h1>
+        <p style="margin-bottom: 20px;">Update your details below and click Save.</p>
+
+        <form id="profileEditForm" class="edit-form">
+            <label for="editUsername">Name</label>
+            <input type="text" id="editUsername" placeholder="Full Name" required>
+
+            <label for="editEmail">Email</label>
+            <input type="email" id="editEmail" placeholder="Email" required>
+
+            <label for="editStatus">Status</label>
+            <select id="editStatus" required>
+                <option value="student">Student</option>
+                <option value="professional">Professional</option>
+            </select>
+
+            <label for="editDob">Date of Birth</label>
+            <input type="date" id="editDob" required>
+
+            <label for="editPhone">Phone</label>
+            <input type="text" id="editPhone" placeholder="Phone" required>
+
+            <label for="editProfession">Profession</label>
+            <input type="text" id="editProfession" placeholder="Profession" required>
+
+            <div id="editMessage" class="msg" style="display: none;"></div>
+            <div class="btn-group">
+                <button type="submit" class="save-btn">Save changes</button>
+                <a href="/home" class="back-btn">Cancel</a>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        // Base path for API (empty if app at root; set if app is mounted e.g. at /expenso)
+        window.API_BASE = "{{ request.script_root or '' }}";
+        document.addEventListener("DOMContentLoaded", async () => {
+            const user = JSON.parse(sessionStorage.getItem("user"));
+            if (!user || !user.id) {
+                window.location.href = (window.API_BASE || '') + "/login_page";
+                return;
+            }
+
+            try {
+                const res = await fetch((window.API_BASE || '') + "/api/profile");
+                const data = await res.json();
+                if (res.ok && data.user) {
+                    const u = data.user;
+                    document.getElementById("editUsername").value = u.username || "";
+                    document.getElementById("editEmail").value = u.email || "";
+                    document.getElementById("editStatus").value = u.status || "professional";
+                    document.getElementById("editDob").value = u.dob ? u.dob.split("T")[0] : "";
+                    document.getElementById("editPhone").value = u.phone || "";
+                    document.getElementById("editProfession").value = u.profession || "";
+                } else {
+                    // Fallback to sessionStorage
+                    document.getElementById("editUsername").value = user.username || "";
+                    document.getElementById("editEmail").value = user.email || "";
+                    document.getElementById("editStatus").value = user.status || "professional";
+                    document.getElementById("editDob").value = user.dob ? user.dob.toString().split("T")[0] : "";
+                    document.getElementById("editPhone").value = user.phone || "";
+                    document.getElementById("editProfession").value = user.profession || "";
+                }
+            } catch (err) {
+                console.error("Error loading profile:", err);
+                document.getElementById("editUsername").value = user.username || "";
+                document.getElementById("editEmail").value = user.email || "";
+                document.getElementById("editStatus").value = user.status || "professional";
+                document.getElementById("editDob").value = user.dob ? String(user.dob).substring(0, 10) : "";
+                document.getElementById("editPhone").value = user.phone || "";
+                document.getElementById("editProfession").value = user.profession || "";
+            }
+
+            document.getElementById("profileEditForm").addEventListener("submit", async (e) => {
+                e.preventDefault();
+                const msgEl = document.getElementById("editMessage");
+                msgEl.style.display = "none";
+
+                const payload = {
+                    username: document.getElementById("editUsername").value.trim(),
+                    email: document.getElementById("editEmail").value.trim(),
+                    status: document.getElementById("editStatus").value,
+                    dob: document.getElementById("editDob").value,
+                    phone: document.getElementById("editPhone").value.trim(),
+                    profession: document.getElementById("editProfession").value.trim()
+                };
+
+                try {
+                    const res = await fetch((window.API_BASE || '') + "/api/profile-update", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await res.json();
+
+                    msgEl.style.display = "block";
+                    if (res.ok) {
+                        msgEl.className = "msg success";
+                        msgEl.textContent = "Profile updated successfully.";
+                        if (data.user) {
+                            sessionStorage.setItem("user", JSON.stringify(data.user));
+                        }
+                        setTimeout(() => { window.location.href = (window.API_BASE || '') + "/profile_edit_page"; }, 1200);
+                    } else {
+                        msgEl.className = "msg error";
+                        msgEl.textContent = data.message || "Failed to update profile.";
+                    }
+                } catch (err) {
+                    msgEl.style.display = "block";
+                    msgEl.className = "msg error";
+                    msgEl.textContent = "Network error. Please try again.";
+                    console.error(err);
+                }
+            });
+        });
+    </script>
+</body>
+</html>

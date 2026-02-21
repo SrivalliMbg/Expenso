@@ -74,24 +74,25 @@
     <aside class="sidebar">
       <div class="profile">
         <div class="profile-row">
-          <a href="/profile_page" class="profile-link">
+          <a href="/profile_edit_page" class="profile-link">
             <div class="avatar-container">
               <img src="{{ url_for('static', filename='images/user avatar.jpg') }}" alt="Avatar" class="avatar">
               <i class="fas fa-user-edit profile-icon"></i>
             </div>
             <span class="username" id="sidebarUsername">{{ username }}</span>
+            <span class="status-badge" id="sidebarStatusBadge" aria-label="Account type"></span>
             <span class="profile-hint">Click to view profile</span>
           </a>
         </div>
       </div>
       <nav class="menu">
-        <a href="/profile_page">Profile</a>
         <a href="/accounts_page">Accounts</a>
         <a href="/cards_page">Cards</a>
         <a href="/insurance_page">Insurance</a>
         <a href="/investments_page">Investments</a>
         <a href="/recent_page">Recent Transactions</a>
         <a href="/expenses_page">Expenses</a>
+        <a href="/ocr_import_page">Import (OCR)</a>
         <a href="/logout_page" class="logout" onclick="return confirmLogout();">Logout</a>
       </nav>
     </aside>
@@ -100,6 +101,12 @@
     <main class="dashboard">
       <!-- Main Content Grid -->
       <div class="dashboard-grid">
+        <!-- Status-specific focus (Student vs Professional) -->
+        <div id="statusFocusSection" class="status-focus-section" style="display: none;">
+          <h3 id="statusFocusTitle"></h3>
+          <ul id="statusFocusList"></ul>
+        </div>
+
         <!-- Top Row -->
         <div class="top-row">
           <!-- What I Have What I Owe Section -->

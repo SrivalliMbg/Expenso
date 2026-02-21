@@ -4,6 +4,14 @@ import io
 import base64
 from flask import current_app
 
+# Use PIL image factory so QR code is a real PNG (requires Pillow)
+try:
+    from qrcode.image.pil import PilImage
+    _qr_image_factory = PilImage
+except ImportError:
+    _qr_image_factory = None  # fallback to qrcode default if no PIL
+
+
 class TOTPManager:
     """TOTP (Time-based One-Time Password) management utilities"""
     
@@ -14,32 +22,39 @@ class TOTPManager:
     
     @staticmethod
     def generate_qr_code(secret, username, issuer="Expenso"):
-        """Generate QR code for TOTP setup"""
-        # Create TOTP URI
+        """Generate QR code for TOTP setup. Returns a data:image/png;base64,... string."""
+        # Create TOTP URI (safe for QR: alphanumeric + a few chars)
         totp_uri = pyotp.totp.TOTP(secret).provisioning_uri(
             name=username,
             issuer_name=issuer
         )
         
-        # Generate QR code
-        qr = qrcode.QRCode(
-            version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_L,
-            box_size=10,
-            border=4,
-        )
+        # Build QRCode; use PIL factory when available so we get a proper PNG
+        kwargs = {
+            "version": 1,
+            "error_correction": qrcode.constants.ERROR_CORRECT_L,
+            "box_size": 10,
+            "border": 4,
+        }
+        if _qr_image_factory is not None:
+            kwargs["image_factory"] = _qr_image_factory
+
+        qr = qrcode.QRCode(**kwargs)
         qr.add_data(totp_uri)
         qr.make(fit=True)
         
-        # Create image
         img = qr.make_image(fill_color="black", back_color="white")
         
-        # Convert to base64 string for embedding in HTML
+        # Convert to base64 PNG for embedding in HTML
         buffer = io.BytesIO()
-        img.save(buffer, format='PNG')
+        try:
+            img.save(buffer, format="PNG")
+        except Exception as e:
+            if current_app:
+                current_app.logger.warning("QR save failed (PIL may be missing): %s", e)
+            raise ValueError("QR image could not be generated. Install Pillow: pip install Pillow") from e
         buffer.seek(0)
-        img_str = base64.b64encode(buffer.getvalue()).decode()
-        
+        img_str = base64.b64encode(buffer.getvalue()).decode("ascii")
         return f"data:image/png;base64,{img_str}"
     
     @staticmethod

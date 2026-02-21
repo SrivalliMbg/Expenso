@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Turing Test – Expenso Chatbot</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='CSS/home.css') }}">
+  <style>
+    body { padding: 20px; max-width: 900px; margin: 0 auto; font-family: 'Segoe UI', sans-serif; }
+    .turing-header { margin-bottom: 20px; padding: 16px; background: #f0f4f8; border-radius: 12px; }
+    .turing-header h1 { margin: 0 0 8px 0; font-size: 1.5rem; }
+    .turing-header p { margin: 0; color: #555; font-size: 0.95rem; }
+    .turing-rating { margin-top: 24px; padding: 20px; background: #fff; border: 1px solid #e0e0e0; border-radius: 12px; }
+    .turing-rating h3 { margin: 0 0 12px 0; font-size: 1.1rem; }
+    .turing-rating .stars { display: flex; gap: 8px; margin: 12px 0; }
+    .turing-rating .stars button { padding: 10px 18px; border: 1px solid #ccc; border-radius: 8px; background: #fff; cursor: pointer; font-size: 1rem; }
+    .turing-rating .stars button:hover { background: #e8f4fc; border-color: #007bff; }
+    .turing-rating .stars button.selected { background: #007bff; color: #fff; border-color: #007bff; }
+    .turing-rating .submit { margin-top: 12px; padding: 10px 20px; background: #28a745; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; }
+    .turing-rating .submit:hover { background: #218838; }
+    .turing-rating .result { margin-top: 12px; color: #28a745; font-weight: 500; }
+    .back-link { display: inline-block; margin-bottom: 16px; color: #007bff; text-decoration: none; }
+    .back-link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <a href="/home" class="back-link">← Back to Dashboard</a>
+  <div class="turing-header">
+    <h1>Turing Test – Chatbot</h1>
+    <p>Chat with the financial assistant below. Ask about budget, savings, investments, stocks, or anything money-related. When you're done, rate how human the conversation felt (1 = clearly a bot, 5 = could be a person).</p>
+  </div>
+
+  <div id="floating-chatbot-container"></div>
+
+  <div class="turing-rating">
+    <h3>How human did the bot feel?</h3>
+    <p style="margin:0 0 8px 0; color:#666;">1 = obviously a bot … 5 = could be human</p>
+    <div class="stars" id="rating-stars">
+      <button type="button" data-rating="1">1</button>
+      <button type="button" data-rating="2">2</button>
+      <button type="button" data-rating="3">3</button>
+      <button type="button" data-rating="4">4</button>
+      <button type="button" data-rating="5">5</button>
+    </div>
+    <button type="button" class="submit" id="submit-rating">Submit rating</button>
+    <div class="result" id="rating-result"></div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/chatbot.js') }}"></script>
+  <script>
+    (function() {
+      var selected = 0;
+      var stars = document.getElementById('rating-stars');
+      var submitBtn = document.getElementById('submit-rating');
+      var resultEl = document.getElementById('rating-result');
+      if (stars) {
+        stars.querySelectorAll('button').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            selected = parseInt(btn.getAttribute('data-rating'), 10);
+            stars.querySelectorAll('button').forEach(function(b) { b.classList.remove('selected'); });
+            btn.classList.add('selected');
+          });
+        });
+      }
+      if (submitBtn) {
+        submitBtn.addEventListener('click', function() {
+          if (selected < 1 || selected > 5) {
+            resultEl.textContent = 'Please pick a rating (1–5) first.';
+            resultEl.style.color = '#856404';
+            return;
+          }
+          fetch('/api/turing_rating', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rating: selected })
+          })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            resultEl.textContent = data.message || 'Thanks for your feedback!';
+            resultEl.style.color = '#28a745';
+          })
+          .catch(function() {
+            resultEl.textContent = 'Thanks for your feedback!';
+            resultEl.style.color = '#28a745';
+          });
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

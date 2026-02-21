@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Import from message/email - Expenso</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='CSS/home.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='CSS/expenses.css') }}">
+  <style>
+    .ocr-container { margin-left: 200px; padding: 20px; max-width: 900px; }
+    .ocr-card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+    .ocr-card h2 { margin: 0 0 12px 0; font-size: 1.2rem; color: #2c3e50; }
+    .ocr-textarea { width: 100%; min-height: 120px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; box-sizing: border-box; }
+    .ocr-actions { margin-top: 12px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .ocr-btn { padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; }
+    .ocr-btn.primary { background: #667eea; color: #fff; }
+    .ocr-btn.primary:hover { background: #5a6fd6; }
+    .ocr-btn.success { background: #28a745; color: #fff; }
+    .ocr-btn.success:hover { background: #218838; }
+    .ocr-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .ocr-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }
+    .ocr-table th, .ocr-table td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
+    .ocr-table th { background: #f8f9fa; color: #495057; font-weight: 600; }
+    .ocr-msg { margin-top: 10px; padding: 10px; border-radius: 8px; }
+    .ocr-msg.success { background: #d4edda; color: #155724; }
+    .ocr-msg.error { background: #f8d7da; color: #721c24; }
+    .ocr-msg.info { background: #e7f3ff; color: #004085; }
+    .file-input-wrap { margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <aside class="sidebar">
+      <div class="profile">
+        <div class="profile-row">
+          <a href="/" class="logo-link">
+            <img src="{{ url_for('static', filename='images/logo.jpg') }}" alt="Logo" class="logo">
+          </a>
+        </div>
+        <div class="username-row">
+          <span class="username" id="sidebarUsername">{{ username }}</span>
+          <span class="status-badge" id="sidebarStatusBadge"></span>
+        </div>
+      </div>
+      <nav class="menu">
+        <a href="/accounts_page">Accounts</a>
+        <a href="/cards_page">Cards</a>
+        <a href="/insurance_page">Insurance</a>
+        <a href="/investments_page">Investments</a>
+        <a href="/recent_page">Recent Transactions</a>
+        <a href="/expenses_page">Expenses</a>
+        <a href="/ocr_import_page" class="active">Import (OCR)</a>
+        <a href="/logout_page" class="logout" onclick="return confirm('Logout?');">Logout</a>
+      </nav>
+    </aside>
+    <main class="ocr-container">
+      <div class="ocr-card">
+        <h2>Import from message, email, or PDF</h2>
+        <p style="margin:0 0 12px 0; color:#666;">Paste SMS/email text, or upload an image (screenshot) or PDF (policy documents, investment statements, etc.). We'll extract transactions, policies, and investments for your analysis.</p>
+        <textarea id="ocrText" class="ocr-textarea" placeholder="Paste message or email text here...&#10;Or upload an image (SMS/email screenshot) or PDF (policy, statement) below."></textarea>
+        <div class="file-input-wrap">
+          <label>Or upload image or PDF:</label>
+          <input type="file" id="ocrFile" accept="image/*,.pdf,application/pdf">
+        </div>
+        <div class="ocr-actions">
+          <button type="button" class="ocr-btn primary" id="parseBtn">Parse</button>
+          <span id="parseStatus"></span>
+        </div>
+      </div>
+      <div class="ocr-card" id="resultsCard" style="display: none;">
+        <h2>Parsed data</h2>
+        <p id="resultsSummary" style="margin:0 0 12px 0; color:#666;"></p>
+        <div id="entriesSection" style="display: none;">
+          <h3 style="margin:0 0 8px 0; font-size:1rem;">Transactions</h3>
+          <div style="overflow-x: auto;">
+            <table class="ocr-table" id="resultsTable">
+              <thead>
+                <tr>
+                  <th>Title</th>
+                  <th>Amount</th>
+                  <th>Type</th>
+                  <th>Date</th>
+                  <th>Category</th>
+                </tr>
+              </thead>
+              <tbody id="resultsBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="policiesSection" style="display: none; margin-top: 16px;">
+          <h3 style="margin:0 0 8px 0; font-size:1rem;">Policies / Insurance</h3>
+          <div style="overflow-x: auto;">
+            <table class="ocr-table">
+              <thead>
+                <tr>
+                  <th>Policy name</th>
+                  <th>Type</th>
+                  <th>Premium</th>
+                  <th>Coverage</th>
+                  <th>Next due</th>
+                </tr>
+              </thead>
+              <tbody id="policiesBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="investmentsSection" style="display: none; margin-top: 16px;">
+          <h3 style="margin:0 0 8px 0; font-size:1rem;">Investments</h3>
+          <div style="overflow-x: auto;">
+            <table class="ocr-table">
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Amount</th>
+                  <th>Start date</th>
+                  <th>Maturity date</th>
+                </tr>
+              </thead>
+              <tbody id="investmentsBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="ocr-actions" style="margin-top: 16px;">
+          <button type="button" class="ocr-btn success" id="importBtn">Import into my account</button>
+          <span id="importStatus"></span>
+        </div>
+      </div>
+      <div id="ocrMessage"></div>
+    </main>
+  </div>
+  <script>
+    (function() {
+      const user = JSON.parse(sessionStorage.getItem('user'));
+      if (!user || !user.id) {
+        window.location.href = '/login_page';
+        return;
+      }
+      document.getElementById('sidebarUsername').textContent = user.username || 'User';
+      const badge = document.getElementById('sidebarStatusBadge');
+      if (badge) {
+        const isStudent = (user.status || '').toLowerCase() === 'student';
+        badge.textContent = isStudent ? 'Student' : 'Professional';
+        badge.className = 'status-badge ' + (isStudent ? 'student' : 'professional');
+      }
+
+      let parsedEntries = [];
+      let parsedPolicies = [];
+      let parsedInvestments = [];
+      const ocrText = document.getElementById('ocrText');
+      const ocrFile = document.getElementById('ocrFile');
+      const parseBtn = document.getElementById('parseBtn');
+      const parseStatus = document.getElementById('parseStatus');
+      const resultsCard = document.getElementById('resultsCard');
+      const resultsBody = document.getElementById('resultsBody');
+      const resultsSummary = document.getElementById('resultsSummary');
+      const entriesSection = document.getElementById('entriesSection');
+      const policiesSection = document.getElementById('policiesSection');
+      const policiesBody = document.getElementById('policiesBody');
+      const investmentsSection = document.getElementById('investmentsSection');
+      const investmentsBody = document.getElementById('investmentsBody');
+      const importBtn = document.getElementById('importBtn');
+      const importStatus = document.getElementById('importStatus');
+      const ocrMessage = document.getElementById('ocrMessage');
+
+      function showMsg(text, type) {
+        ocrMessage.innerHTML = '<div class="ocr-msg ' + (type || 'info') + '">' + text + '</div>';
+        ocrMessage.style.display = 'block';
+      }
+
+      function applyParseResult(data) {
+        parsedEntries = data.entries || [];
+        parsedPolicies = data.policies || [];
+        parsedInvestments = data.investments || [];
+        if (data.raw_text) ocrText.value = data.raw_text;
+        renderAll();
+        resultsCard.style.display = 'block';
+        const total = parsedEntries.length + parsedPolicies.length + parsedInvestments.length;
+        if (total === 0) showMsg('No transactions, policies, or investments found. Try PDF (policy/statement), or text with amounts and dates.', 'info');
+      }
+
+      ocrFile.addEventListener('change', function() {
+        const f = this.files[0];
+        if (!f) return;
+        const fd = new FormData();
+        fd.append('file', f);
+        const isPdf = (f.name || '').toLowerCase().endsWith('.pdf');
+        parseStatus.textContent = isPdf ? 'Reading PDF...' : 'Parsing image...';
+        fetch('/api/ocr/parse', { method: 'POST', body: fd })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            parseStatus.textContent = '';
+            applyParseResult(data);
+          })
+          .catch(function() {
+            parseStatus.textContent = 'Parse failed';
+            showMsg('Failed to parse file.', 'error');
+          });
+      });
+
+      parseBtn.addEventListener('click', function() {
+        const text = ocrText.value.trim();
+        if (!text) {
+          showMsg('Paste some text or upload an image/PDF first.', 'info');
+          return;
+        }
+        parseStatus.textContent = 'Parsing...';
+        fetch('/api/ocr/parse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: text })
+        })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            parseStatus.textContent = '';
+            applyParseResult(data);
+          })
+          .catch(function() {
+            parseStatus.textContent = 'Parse failed';
+            showMsg('Failed to parse.', 'error');
+          });
+      });
+
+      function renderAll() {
+        resultsBody.innerHTML = '';
+        parsedEntries.forEach(function(e) {
+          const tr = document.createElement('tr');
+          tr.innerHTML = '<td>' + (e.title || '').replace(/</g, '&lt;') + '</td><td>₹' + (e.amount || 0) + '</td><td>' + (e.type || 'Debit') + '</td><td>' + (e.date || '') + '</td><td>' + (e.category || 'Other') + '</td>';
+          resultsBody.appendChild(tr);
+        });
+        entriesSection.style.display = parsedEntries.length ? 'block' : 'none';
+        policiesBody.innerHTML = '';
+        parsedPolicies.forEach(function(p) {
+          const tr = document.createElement('tr');
+          tr.innerHTML = '<td>' + (p.policy_name || '').replace(/</g, '&lt;') + '</td><td>' + (p.policy_type || '') + '</td><td>₹' + (p.premium_amount || 0) + '</td><td>₹' + (p.coverage_amount || 0) + '</td><td>' + (p.next_due_date || '') + '</td>';
+          policiesBody.appendChild(tr);
+        });
+        policiesSection.style.display = parsedPolicies.length ? 'block' : 'none';
+        investmentsBody.innerHTML = '';
+        parsedInvestments.forEach(function(i) {
+          const tr = document.createElement('tr');
+          tr.innerHTML = '<td>' + (i.investment_type || '').replace(/</g, '&lt;') + '</td><td>₹' + (i.amount || 0) + '</td><td>' + (i.start_date || '') + '</td><td>' + (i.maturity_date || '') + '</td>';
+          investmentsBody.appendChild(tr);
+        });
+        investmentsSection.style.display = parsedInvestments.length ? 'block' : 'none';
+        const parts = [];
+        if (parsedEntries.length) parts.push(parsedEntries.length + ' transaction(s)');
+        if (parsedPolicies.length) parts.push(parsedPolicies.length + ' policy/policies');
+        if (parsedInvestments.length) parts.push(parsedInvestments.length + ' investment(s)');
+        resultsSummary.textContent = (parts.length ? parts.join(', ') + ' found. ' : '') + 'Review and click Import to add to your account.';
+      }
+
+      importBtn.addEventListener('click', function() {
+        if (parsedEntries.length === 0 && parsedPolicies.length === 0 && parsedInvestments.length === 0) {
+          showMsg('Parse first to get data.', 'error');
+          return;
+        }
+        importBtn.disabled = true;
+        importStatus.textContent = 'Importing...';
+        fetch('/api/ocr/import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ entries: parsedEntries, policies: parsedPolicies, investments: parsedInvestments })
+        })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            importBtn.disabled = false;
+            importStatus.textContent = '';
+            if (data.imported !== undefined) {
+              showMsg(data.message || 'Import complete. Data will appear in your dashboard, insurance, and investments.', 'success');
+              parsedEntries = [];
+              parsedPolicies = [];
+              parsedInvestments = [];
+              resultsCard.style.display = 'none';
+              ocrText.value = '';
+            } else {
+              showMsg(data.message || 'Import failed.', 'error');
+            }
+          })
+          .catch(function() {
+            importBtn.disabled = false;
+            importStatus.textContent = '';
+            showMsg('Import failed. Try again.', 'error');
+          });
+      });
+    })();
+  </script>
+</body>
+</html>
