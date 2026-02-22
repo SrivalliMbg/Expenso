@@ -1,3 +1,5 @@
+print("🚀 NEW CLEAN BUILD - NO MYSQL")
+
 import os
 
 # Load .env before Config so SMTP, DB, SECRET_KEY etc. are available
