@@ -60,6 +60,15 @@ def _normalize_database_url(raw_url):
 _raw_db_url = _env("DATABASE_URL")
 _db_from_url = _normalize_database_url(_raw_db_url) if _raw_db_url else None
 
+# Simple URI resolution: prefer DATABASE_URL (postgres:// -> postgresql://), else fall back to MySQL.
+db_url = os.getenv("DATABASE_URL", "").strip() or _raw_db_url
+if db_url:
+    if db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql://", 1)
+    _sqlalchemy_database_uri = db_url
+else:
+    _sqlalchemy_database_uri = None  # set in Config from MySQL fallback
+
 class Config:
     # Production: FLASK_ENV=production, DEBUG=False (Dockerfile / Render)
     FLASK_ENV = _env("FLASK_ENV") or "production"
@@ -125,12 +134,9 @@ class Config:
     # Default False: generate new synthetic data. True: copy from any user who already has transactions.
     DEMO_MODE = _env("DEMO_MODE", "").lower() in ("true", "1", "yes")
 
-    # SQLAlchemy: DATABASE_URL when set (absolute priority); otherwise MySQL from MYSQL_* (no localhost in production)
-    if _db_from_url is not None:
-        if _db_from_url[0] == "postgresql":
-            SQLALCHEMY_DATABASE_URI = _db_from_url[1]
-        else:
-            SQLALCHEMY_DATABASE_URI = _db_from_url[5]
+    # SQLAlchemy: DATABASE_URL when set (postgres:// normalized to postgresql://); else fall back to MySQL
+    if _sqlalchemy_database_uri is not None:
+        SQLALCHEMY_DATABASE_URI = _sqlalchemy_database_uri
     else:
         if _is_production() and not _env("MYSQL_HOST"):
             SQLALCHEMY_DATABASE_URI = ""
