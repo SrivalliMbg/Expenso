@@ -1,7 +1,9 @@
 """
 Expenso configuration. All secrets must come from environment variables in production.
 Set env vars or use .env (e.g. python-dotenv) — no hardcoded secrets.
-Supports DATABASE_URL (PostgreSQL/Supabase or MySQL) or fallback to MYSQL_* for local development.
+Priority: DATABASE_URL has absolute priority when set; MYSQL_* are ignored for the
+database connection in that case. Only when DATABASE_URL is unset do we use MYSQL_*.
+No localhost default in production.
 """
 import os
 from urllib.parse import quote_plus, urlparse
@@ -12,18 +14,25 @@ def _env(key, default=""):
     return os.environ.get(key, default).strip()
 
 
-def _normalize_database_url():
+def _is_production():
+    """True when FLASK_ENV is production or DEBUG is not enabled (no localhost default)."""
+    env = (_env("FLASK_ENV") or "production").lower()
+    debug = _env("DEBUG", "").lower() in ("true", "1", "yes")
+    return env == "production" or not debug
+
+
+def _normalize_database_url(raw_url):
     """
     Parse DATABASE_URL. Returns:
-    - None if DATABASE_URL not set
+    - None if raw_url is empty/invalid
     - ("postgresql", sqlalchemy_uri) for postgres/postgresql (psycopg2)
     - ("mysql", host, user, password, db, sqlalchemy_uri) for mysql
     """
-    raw = _env("DATABASE_URL")
-    if not raw:
+    if not raw_url or not raw_url.strip():
         return None
+    raw = raw_url.strip()
     scheme = (raw.split(":")[0] or "").lower()
-    # PostgreSQL: postgres:// -> postgresql:// for SQLAlchemy; use psycopg2 driver
+    # PostgreSQL: postgres:// -> postgresql:// for SQLAlchemy; use psycopg2
     if scheme in ("postgres", "postgresql"):
         url = raw
         if url.startswith("postgres://"):
@@ -31,15 +40,15 @@ def _normalize_database_url():
         if "://" in url and not url.split("://")[0].startswith("postgresql+"):
             url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
         return ("postgresql", url)
-    # MySQL: existing behavior for MYSQL_* and mysql+mysqlconnector URI (no hardcoded defaults)
+    # MySQL: use only values from the URL (DATABASE_URL has priority; do not substitute from MYSQL_*)
     if "mysql" in scheme:
         try:
             parsed = urlparse(raw)
-            host = parsed.hostname or _env("MYSQL_HOST")
+            host = parsed.hostname or ""
             port = parsed.port or 3306
-            user = parsed.username or _env("MYSQL_USER")
+            user = parsed.username or ""
             password = parsed.password or ""
-            db = (parsed.path or "/").lstrip("/") or _env("MYSQL_DB")
+            db = (parsed.path or "/").lstrip("/") or ""
             uri = f"mysql+mysqlconnector://{quote_plus(user or '')}:{quote_plus(password)}@{host or ''}:{port}/{db or ''}"
             return ("mysql", host or "", user or "", password, db or "", uri)
         except Exception:
@@ -47,30 +56,40 @@ def _normalize_database_url():
     return None
 
 
-_db_from_url = _normalize_database_url()
+# DATABASE_URL has absolute priority: when set, MYSQL_* are never used for the DB connection.
+_raw_db_url = _env("DATABASE_URL")
+_db_from_url = _normalize_database_url(_raw_db_url) if _raw_db_url else None
 
 class Config:
     # Production: FLASK_ENV=production, DEBUG=False (Dockerfile / Render)
     FLASK_ENV = _env("FLASK_ENV") or "production"
     DEBUG = _env("DEBUG", "").lower() in ("true", "1", "yes")
 
-    # Database: DATABASE_URL (PostgreSQL or MySQL) or fallback to MYSQL_* for local
-    if _db_from_url is None:
-        MYSQL_HOST = _env("MYSQL_HOST") or "localhost"
-        MYSQL_USER = _env("MYSQL_USER") or "root"
-        MYSQL_PASSWORD = _env("MYSQL_PASSWORD") or ""
-        MYSQL_DB = _env("MYSQL_DB") or "expenso_db"
-    elif _db_from_url[0] == "mysql":
-        MYSQL_HOST = _db_from_url[1]
-        MYSQL_USER = _db_from_url[2]
-        MYSQL_PASSWORD = _db_from_url[3] or ""
-        MYSQL_DB = _db_from_url[4]
+    # Database: DATABASE_URL wins absolutely when set (MYSQL_* ignored); else fall back to MYSQL_*. No localhost default in production.
+    if _db_from_url is not None:
+        if _db_from_url[0] == "mysql":
+            MYSQL_HOST = _db_from_url[1]
+            MYSQL_USER = _db_from_url[2]
+            MYSQL_PASSWORD = _db_from_url[3] or ""
+            MYSQL_DB = _db_from_url[4]
+        else:
+            # PostgreSQL (Supabase): ignore MYSQL_*; no MySQL pool when DATABASE_URL is set
+            MYSQL_HOST = ""
+            MYSQL_USER = ""
+            MYSQL_PASSWORD = ""
+            MYSQL_DB = ""
     else:
-        # PostgreSQL (Supabase): MYSQL_* left from env for any legacy reads
-        MYSQL_HOST = _env("MYSQL_HOST") or ""
-        MYSQL_USER = _env("MYSQL_USER") or ""
-        MYSQL_PASSWORD = _env("MYSQL_PASSWORD") or ""
-        MYSQL_DB = _env("MYSQL_DB") or ""
+        # DATABASE_URL not set: fall back to MYSQL_*; in production do not default to localhost
+        if _is_production():
+            MYSQL_HOST = _env("MYSQL_HOST")
+            MYSQL_USER = _env("MYSQL_USER")
+            MYSQL_PASSWORD = _env("MYSQL_PASSWORD") or ""
+            MYSQL_DB = _env("MYSQL_DB")
+        else:
+            MYSQL_HOST = _env("MYSQL_HOST") or "localhost"
+            MYSQL_USER = _env("MYSQL_USER") or "root"
+            MYSQL_PASSWORD = _env("MYSQL_PASSWORD") or ""
+            MYSQL_DB = _env("MYSQL_DB") or "expenso_db"
 
     # Flask secret (must set SECRET_KEY in production)
     SECRET_KEY = _env("SECRET_KEY") or os.environ.get("FLASK_SECRET_KEY", "dev-secret-change-in-production")
@@ -106,16 +125,20 @@ class Config:
     # Default False: generate new synthetic data. True: copy from any user who already has transactions.
     DEMO_MODE = _env("DEMO_MODE", "").lower() in ("true", "1", "yes")
 
-    # SQLAlchemy (ingestion models); PostgreSQL or MySQL from DATABASE_URL or MYSQL_*
-    if _db_from_url is None:
-        _pw = _env("MYSQL_PASSWORD") or ""
-        _user = _env("MYSQL_USER") or "root"
-        _host = _env("MYSQL_HOST") or "localhost"
-        _db = _env("MYSQL_DB") or "expenso_db"
-        SQLALCHEMY_DATABASE_URI = f"mysql+mysqlconnector://{quote_plus(_user)}:{quote_plus(_pw)}@{_host}/{_db}"
-    elif _db_from_url[0] == "postgresql":
-        SQLALCHEMY_DATABASE_URI = _db_from_url[1]
+    # SQLAlchemy: DATABASE_URL when set (absolute priority); otherwise MySQL from MYSQL_* (no localhost in production)
+    if _db_from_url is not None:
+        if _db_from_url[0] == "postgresql":
+            SQLALCHEMY_DATABASE_URI = _db_from_url[1]
+        else:
+            SQLALCHEMY_DATABASE_URI = _db_from_url[5]
     else:
-        SQLALCHEMY_DATABASE_URI = _db_from_url[5]
+        if _is_production() and not _env("MYSQL_HOST"):
+            SQLALCHEMY_DATABASE_URI = ""
+        else:
+            _pw = _env("MYSQL_PASSWORD") or ""
+            _user = _env("MYSQL_USER") or "root"
+            _host = _env("MYSQL_HOST") or "localhost"
+            _db = _env("MYSQL_DB") or "expenso_db"
+            SQLALCHEMY_DATABASE_URI = f"mysql+mysqlconnector://{quote_plus(_user)}:{quote_plus(_pw)}@{_host}/{_db}"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True, "pool_recycle": 300}
