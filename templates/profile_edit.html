@@ -5,6 +5,19 @@
     <title>Edit Profile - Expenso</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <style>
+        /* Profile edit page: scrollable, fit viewport */
+        body.profile-edit-page {
+            min-height: 100vh;
+            height: auto;
+            align-items: flex-start;
+            overflow-y: auto;
+            padding: 20px 0 40px;
+            box-sizing: border-box;
+        }
+        body.profile-edit-page .container {
+            margin: 0 auto 24px;
+            max-height: none;
+        }
         .edit-form { max-width: 400px; margin: 0 auto; text-align: left; }
         .edit-form label { display: block; margin-top: 12px; font-weight: bold; }
         .edit-form input, .edit-form select { width: 100%; padding: 8px; margin-top: 4px; box-sizing: border-box; }
@@ -18,7 +31,7 @@
         .edit-form .msg.success { background: #d4edda; color: #155724; }
     </style>
 </head>
-<body>
+<body class="profile-edit-page">
     <div class="container">
         <img src="{{ url_for('static', filename='images/logo.jpg') }}" alt="Expenso Logo" class="logo-img">
         <h1>Edit Profile</h1>

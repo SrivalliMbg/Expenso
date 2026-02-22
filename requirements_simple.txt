@@ -12,3 +12,6 @@ pyOpenSSL==23.3.0
 cryptography==41.0.7
 pytesseract==0.3.10
 pypdf==4.0.1
+scikit-learn>=1.2.0
+joblib>=1.2.0
+openai>=1.0.0

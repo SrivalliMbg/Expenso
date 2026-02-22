@@ -3,15 +3,24 @@ Financial Chatbot for Expenso Application
 Integrated with the main Flask app and database
 """
 
-from flask import Blueprint, request, jsonify, current_app, session
+from flask import Blueprint, request, jsonify, current_app, g, session
 import pandas as pd
 import numpy as np
 import yfinance as yf
 import re
 import os
 import random
+import requests
 from datetime import datetime, timedelta
 import json
+
+try:
+    from app.chatbot.intent_classifier import get_intent
+except ImportError:
+    try:
+        from intent_classifier import get_intent
+    except ImportError:
+        get_intent = None
 
 # Create blueprint
 chatbot_bp = Blueprint('chatbot', __name__)
@@ -93,98 +102,162 @@ class FinancialChatbot:
         self.user_context = {}
         # Global chat history for fallback
         self.chat_history = []
-    
-    def get_user_financial_data(self, user_id):
-        """Get user's comprehensive financial data from all database tables"""
-        if not current_app.mysql:
-            return self._get_mock_financial_data()
-        
+
+    def ollama_financial_agent(self, message, context_data):
+        """Use local Ollama LLM for financial advice. Returns None if Ollama is offline or errors."""
+        if not context_data:
+            return "No financial context available to analyze."
         try:
-            cursor = current_app.mysql.cursor(dictionary=True)
+            prompt = f"""
+You are Expenso AI, a financial assistant.
+
+STRICT RULES:
+- Use ONLY the data provided in Context Data.
+- DO NOT generate or assume missing balances.
+- If data is missing, clearly state it.
+- Never hallucinate financial numbers.
+
+User Question:
+{message}
+
+Context Data:
+{json.dumps(context_data, indent=2, default=str)}
+
+If financial data is empty, respond that no data exists.
+"""
+            resp = requests.post(
+                "http://localhost:11434/api/generate",
+                json={
+                    "model": "llama3",
+                    "prompt": prompt,
+                    "stream": False
+                },
+                timeout=60
+            )
+            resp.raise_for_status()
+            out = resp.json()
+            return out.get("response") or None
+        except Exception:
+            return None
+
+    def get_gold_price(self):
+        """Fetch current gold price (USD per oz) via yfinance."""
+        try:
+            gold = yf.Ticker("GC=F")
+            data = gold.history(period="1d")
+            if not data.empty:
+                return float(data["Close"].iloc[-1])
+        except Exception:
+            pass
+        return None
+
+    def get_stock_price(self, symbol):
+        """Fetch current stock price for symbol via yfinance."""
+        if not symbol or not str(symbol).strip():
+            return None
+        try:
+            stock = yf.Ticker(str(symbol).strip().upper())
+            data = stock.history(period="1d")
+            if not data.empty:
+                return float(data["Close"].iloc[-1])
+        except Exception:
+            pass
+        return None
+
+    def get_user_financial_data(self, user_id):
+        """Get user's comprehensive financial data from all database tables. Returns {} when no DB, no user_id, or no accounts. No demo or default data."""
+        if not g.mysql or user_id is None or user_id == '':
+            return {}
+        
+        cursor = None
+        try:
+            cursor = g.mysql.cursor(dictionary=True, buffered=True)
             
-            # Get all accounts data
+            # Only this user's data: get accounts for user_id first
             cursor.execute("""
                 SELECT id, type, bank, branch, acc_no, balance, created_at 
                 FROM accounts
-            """)
+                WHERE user_id = %s
+            """, (user_id,))
             accounts = cursor.fetchall()
+            account_ids = [a['id'] for a in accounts]
             
-            # Get all transactions data
-            cursor.execute("""
+            if not account_ids:
+                return {}
+            
+            placeholders = ','.join(['%s'] * len(account_ids))
+            
+            cursor.execute(f"""
                 SELECT id, account_id, title, amount, type, date, created_at
                 FROM transactions
+                WHERE account_id IN ({placeholders})
                 ORDER BY date DESC
-            """)
+            """, tuple(account_ids))
             transactions = cursor.fetchall()
             
-            # Get all expenses data
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT id, account_id, title, amount, category, date, created_at
                 FROM expenses
+                WHERE account_id IN ({placeholders})
                 ORDER BY date DESC
-            """)
+            """, tuple(account_ids))
             expenses = cursor.fetchall()
             
-            # Get all cards data
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT id, account_id, card_type, card_number, expiry_date, cvv, limit_amount, created_at
                 FROM cards
-            """)
+                WHERE account_id IN ({placeholders})
+            """, tuple(account_ids))
             cards = cursor.fetchall()
             
-            # Get all investments data
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT id, account_id, investment_type, amount, start_date, maturity_date, created_at
                 FROM investments
-            """)
+                WHERE account_id IN ({placeholders})
+            """, tuple(account_ids))
             investments = cursor.fetchall()
             
-            # Get all loans data
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT id, account_id, description, amount, interest_rate, due_date, created_at
                 FROM loans
-            """)
+                WHERE account_id IN ({placeholders})
+            """, tuple(account_ids))
             loans = cursor.fetchall()
             
-            # Get all insurance data
-            cursor.execute("""
-                SELECT id, account_id, policy_name, policy_type, premium_amount, coverage_amount, next_due_date, created_at
+            cursor.execute(f"""
+                SELECT id, account_id, policy_name, premium_amount, coverage_amount, created_at
                 FROM insurance
-            """)
+                WHERE account_id IN ({placeholders})
+            """, tuple(account_ids))
             insurance = cursor.fetchall()
             
-            # Get all borrowings data
-            cursor.execute("""
-                SELECT id, account_id, borrower_name, amount, borrowed_date, expected_return_date, status, created_at
+            cursor.execute(f"""
+                SELECT id, account_id, amount, created_at
                 FROM borrowings
-            """)
+                WHERE account_id IN ({placeholders})
+            """, tuple(account_ids))
             borrowings = cursor.fetchall()
             
-            # Calculate spending by category from expenses
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT category, SUM(amount) as total_amount, COUNT(*) as count
                 FROM expenses
-                WHERE MONTH(date) = MONTH(CURDATE())
+                WHERE account_id IN ({placeholders})
+                AND MONTH(date) = MONTH(CURDATE())
                 AND YEAR(date) = YEAR(CURDATE())
                 GROUP BY category
                 ORDER BY total_amount DESC
-            """)
+            """, tuple(account_ids))
             spending_by_category = cursor.fetchall()
             
-            # Calculate monthly transaction summary
-            cursor.execute("""
-                SELECT 
-                    type,
-                    SUM(amount) as total_amount,
-                    COUNT(*) as count
+            cursor.execute(f"""
+                SELECT type, SUM(amount) as total_amount, COUNT(*) as count
                 FROM transactions
-                WHERE MONTH(date) = MONTH(CURDATE())
+                WHERE account_id IN ({placeholders})
+                AND MONTH(date) = MONTH(CURDATE())
                 AND YEAR(date) = YEAR(CURDATE())
                 GROUP BY type
-            """)
+            """, tuple(account_ids))
             monthly_transaction_summary = cursor.fetchall()
-            
-            cursor.close()
             
             return {
                 'accounts': accounts,
@@ -201,48 +274,32 @@ class FinancialChatbot:
             }
         except Exception as e:
             print(f"Error fetching financial data: {e}")
-            return self._get_mock_financial_data()
-    
-    def _get_mock_financial_data(self):
-        """Return mock data when database is not available"""
-        return {
-            'accounts': [
-                {'account_type': 'Savings', 'balance': 50000},
-                {'account_type': 'Credit', 'balance': -15000}
-            ],
-            'transactions': [
-                {'description': 'Grocery Shopping', 'amount': 2500, 'type': 'Debit', 'category': 'Food', 'date': datetime.now()},
-                {'description': 'Salary Credit', 'amount': 75000, 'type': 'Credit', 'category': 'Income', 'date': datetime.now()},
-                {'description': 'Uber Ride', 'amount': 350, 'type': 'Debit', 'category': 'Transport', 'date': datetime.now()},
-                {'description': 'Netflix Subscription', 'amount': 499, 'type': 'Debit', 'category': 'Entertainment', 'date': datetime.now()}
-            ],
-            'spending_by_category': [
-                {'category': 'Shopping', 'total_amount': 12000, 'count': 8},
-                {'category': 'Food', 'total_amount': 8000, 'count': 12},
-                {'category': 'Transport', 'total_amount': 6000, 'count': 15},
-                {'category': 'Entertainment', 'total_amount': 4000, 'count': 6},
-                {'category': 'Bills', 'total_amount': 10000, 'count': 4}
-            ],
-            'user_id': 'demo_user'
-        }
+            return {}
+        finally:
+            if cursor is not None:
+                try:
+                    cursor.close()
+                except Exception:
+                    pass
     
     def analyze_spending_patterns(self, financial_data, is_followup=False):
-        """Analyze user's spending patterns from real database data"""
-        spending_data = financial_data.get('spending_by_category', [])
-        expenses = financial_data.get('expenses', [])
-        transactions = financial_data.get('transactions', [])
+        """Analyze user's spending patterns from real database data. No demo or hardcoded numbers."""
+        if not financial_data:
+            return "No financial activity recorded yet."
+        spending_data = financial_data.get('spending_by_category', []) or []
+        expenses = financial_data.get('expenses', []) or []
+        transactions = financial_data.get('transactions', []) or []
         
-        if not spending_data and not expenses:
-            lead = "I don't see any spending data yet." if not is_followup else "Still no spending data on file."
-            return f"""{lead} Once you add some expenses in the Expenses section, I can help you see where your money goes, spot top categories, and suggest where to cut back. Want tips on tracking expenses?"""
+        total_spent = sum(item.get('total_amount', 0) for item in spending_data) if spending_data else 0
+        if total_spent == 0 and not expenses:
+            return "No financial activity recorded yet."
         
-        total_spent = sum(item['total_amount'] for item in spending_data) if spending_data else 0
         recent_expenses = expenses[:10] if expenses else []
         
-        # Lead with the direct answer
+        # Lead with the direct answer from real data only
         if spending_data:
-            top_category = max(spending_data, key=lambda x: x['total_amount'])
-            lead = f"So you're spending about ₹{total_spent:,} this month — most of it goes to **{top_category['category']}** (₹{top_category['total_amount']:,})."
+            top_category = max(spending_data, key=lambda x: x.get('total_amount', 0))
+            lead = f"So you're spending about ₹{total_spent:,} this month — most of it goes to **{top_category.get('category', 'Other')}** (₹{top_category.get('total_amount', 0):,})."
         else:
             lead = f"You've got {len(expenses)} expenses logged; total around ₹{total_spent:,}."
         
@@ -264,9 +321,11 @@ class FinancialChatbot:
         return analysis.strip()
     
     def get_savings_recommendations(self, financial_data, is_followup=False):
-        """Provide savings recommendations based on spending patterns"""
-        spending_data = financial_data.get('spending_by_category', [])
-        accounts = financial_data.get('accounts', [])
+        """Provide savings recommendations based on spending patterns. No demo data."""
+        if not financial_data:
+            return "No financial activity recorded yet."
+        spending_data = financial_data.get('spending_by_category', []) or []
+        accounts = financial_data.get('accounts', []) or []
         
         # Calculate total income and expenses
         total_income = 0
@@ -720,7 +779,7 @@ Would you like help getting started with tracking transactions?"""
     def _add_conversational_transition(self, response, topic, context):
         """Add natural conversational transitions to responses"""
         transitions = {
-            'budget': "\n\nWant to dive deeper? I can help with a budget plan or cutting spending in specific areas.",
+            'budget': "",  # already ends with "I can suggest where to cut back or help with a budget plan"
             'savings': "\n\nWant to talk investments or building an emergency fund next?",
             'investment': "\n\nI can go into specific investment types or stocks, or look at your portfolio.",
             'stock': "\n\nI can give more detail on any of these or help with strategy.",
@@ -738,7 +797,7 @@ Would you like help getting started with tracking transactions?"""
         first_lower = response[:60].lower()
         skip_opener = any(x in first_lower for x in [
             "good question", "so you're", "yeah so", "sure —", "okay so", "here's the thing",
-            "honestly", "the short answer", "hey!", "hi there", "hello!", "you're welcome",
+            "honestly", "the short answer", "hey!", "hey ", "hi there", "hi ", "hello!", "you're welcome",
             "anytime", "no problem", "glad i could", "i'd love to help"
         ])
         if not skip_opener:
@@ -770,29 +829,146 @@ Would you like help getting started with tracking transactions?"""
         
         # Get user's financial data
         financial_data = self.get_user_financial_data(user_id)
-        
-        # Handle greetings and small talk
-        if any(word in message_lower for word in ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening']):
+
+        data_values = [v for v in (financial_data or {}).values() if isinstance(v, (list, dict))]
+        if not financial_data or (not data_values or all(not x for x in data_values)):
+            return (
+                "I couldn't find any financial data linked to your account yet. "
+                "Please add accounts or transactions first so I can analyze your finances."
+            )
+
+        # Intent-based context: gold/stock get real-time data; else use financial_data
+        context_data = dict(financial_data) if financial_data else {}
+        if "gold" in message_lower:
+            gold_price = self.get_gold_price()
+            context_data["gold_price_usd"] = gold_price
+            ollama_response = self.ollama_financial_agent(message, context_data)
+            if ollama_response:
+                return ollama_response
+        elif "stock" in message_lower:
+            symbol = None
+            ticker_match = re.search(r"\b([A-Za-z]{2,5}(?:\.NS|\.BO)?)\b", message)
+            if ticker_match:
+                symbol = ticker_match.group(1).upper()
+            if not symbol and any(t in message_lower for t in ["reliance", "tata", "infosys", "hdfc", "icici"]):
+                mapping = {"reliance": "RELIANCE.NS", "tata": "TATASTEEL.NS", "infosys": "INFY.NS", "hdfc": "HDFCBANK.NS", "icici": "ICICIBANK.NS"}
+                for name, sym in mapping.items():
+                    if name in message_lower:
+                        symbol = sym
+                        break
+            price = self.get_stock_price(symbol) if symbol else None
+            context_data["stock_symbol"] = symbol
+            context_data["stock_price"] = price
+            ollama_response = self.ollama_financial_agent(message, context_data)
+            if ollama_response:
+                return ollama_response
+        else:
+            ollama_response = self.ollama_financial_agent(message, context_data)
+            if ollama_response:
+                return ollama_response
+
+        # --- Keyword routing fallback (when Ollama is offline or returns None) ---
+        # Don't treat "how much did I spend" as casual_how — only when message looks like small talk
+        casual_phrases = [
+            'how you doing', 'how are you', 'how do you do', "how's it going", "how r u",
+            "what's up", 'whats up', 'how ya doing', 'you good', 'doing good', 'doing well',
+            'how have you been', 'how is it going', ' wbu', 'and you', 'sup '
+        ]
+        finance_in_message = any(w in message_lower for w in ['spend', 'save', 'budget', 'expense', 'stock', 'balance', 'money', 'invest', 'loan', 'transaction'])
+        casual_how = any(p in message_lower for p in casual_phrases) and not finance_in_message
+        if casual_how:
             self._update_context(user_id, state='greeting')
             name = (profile_data.get('Name', '') or '').strip() if profile_data else ''
             first_name = name.split()[0] if name else ''
-            intro = random.choice([
-                "I'm here to help with your finances — think of me as a friend who's good with numbers. ",
-                "I'm your finance sidekick. ",
-                "I help people make sense of their money. "
-            ])
-            body = (
-                f"We can look at stuff like: where your money's going, how to save more, "
-                f"investments, stocks under a certain price, or loans and cards. "
-            )
-            ask = "What do you want to look at first?"
-            full = f"{intro}{body}\n\n{ask}"
-            if first_name:
-                full = f"Hey {first_name}! " + full
+            short = random.choice(["I'm good, thanks! What can I help you with?", "Doing well! Need anything?", "All good here. What do you want to look at?"])
+            return f"Hey {first_name}! {short}" if first_name else short
+
+        # Greeting only when message is *just* a greeting (or short) — don't treat "hi show my budget" as greeting
+        has_greeting_word = any(w in message_lower for w in ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening'])
+        finance_words = ['budget', 'spending', 'expense', 'expenses', 'spend', 'save', 'savings', 'invest', 'stock', 'balance', 'transaction', 'loan', 'insurance', 'card', 'money', 'portfolio', 'help']
+        has_finance_intent = any(w in message_lower for w in finance_words)
+        short_greetings = ('hello', 'hi', 'hey', 'hiya', 'heya', 'good morning', 'good afternoon', 'good evening')
+        is_just_greeting = message_lower.strip() in short_greetings or message_lower.strip().rstrip('!?.') in short_greetings
+        treat_as_greeting = has_greeting_word and (is_just_greeting or (len(message_lower) <= 20 and not has_finance_intent))
+        if treat_as_greeting:
+            self._update_context(user_id, state='greeting')
+            name = (profile_data.get('Name', '') or '').strip() if profile_data else ''
+            first_name = name.split()[0] if name else ''
+            if is_just_greeting:
+                short = random.choice(["What can I help you with?", "Need anything?", "What do you want to look at?"])
+                full = f"Hey {first_name}! {short}" if first_name else (random.choice(["Hey! ", "Hi! "]) + short)
             else:
-                full = random.choice(["Hey! ", "Hi! "]) + full
+                ask = "What do you want to look at? Budget, savings, stocks, loans — just ask."
+                full = f"Hey {first_name}! I'm here to help with your money. {ask}" if first_name else (random.choice(["Hey! ", "Hi! "]) + f"I'm here to help with your money. {ask}")
             return self._humanize(full, is_greeting=True)
-        
+
+        if any(word in message_lower for word in ['thank', 'thanks', 'appreciate', 'grateful']):
+            self._update_context(user_id, state='active')
+            return random.choice(THANKS_RESPONSES) + " If you think of anything else, just ask."
+
+        # --- NN intent disabled: use keyword routing only so intent is reliable ---
+        intent = None  # get_intent(message) if get_intent else None
+        if intent and intent not in ("clarify", "greeting", "casual_how", "thanks"):
+            name = (profile_data.get('Name', '') or '').strip() if profile_data else ''
+            first_name = name.split()[0] if name else ''
+            if intent == "budget":
+                self._update_context(user_id, topic='budget', response_type='analysis', state='active')
+                response = self.analyze_spending_patterns(financial_data, is_followup)
+                response = self._add_conversational_transition(response, 'budget', context)
+                return self._humanize(response, topic='budget')
+            if intent == "savings":
+                self._update_context(user_id, topic='savings', response_type='recommendations', state='active')
+                response = self.get_savings_recommendations(financial_data, is_followup)
+                response = self._add_conversational_transition(response, 'savings', context)
+                return self._humanize(response, topic='savings')
+            if intent == "investment":
+                self._update_context(user_id, topic='investment', response_type='advice', state='active')
+                advice = self.get_investment_advice(user_mode)
+                response = f"{advice}\n\nWant to see your current investments? Just ask me to look at your portfolio."
+                return self._humanize(response, topic='investment')
+            if intent == "stock":
+                self._update_context(user_id, topic='stock', response_type='recommendations', state='active')
+                price_match = re.search(r'under\s+(\d+)', message_lower)
+                count_match = re.search(r'(\d+)\s+stocks?', message_lower)
+                price_limit = int(price_match.group(1)) if price_match else 500
+                count = int(count_match.group(1)) if count_match else 10
+                response = self.get_stock_recommendations(price_limit, count)
+                response = response + "\n\nI can go deeper on any of these or help with strategy if you want."
+                return self._humanize(response, topic='stock')
+            if intent == "transactions":
+                self._update_context(user_id, topic='transactions', response_type='analysis', state='active')
+                response = self.get_recent_transactions_analysis(financial_data, is_followup)
+                response = response + "\n\nWant to dig into spending patterns? Just ask about your budget."
+                return self._humanize(response, topic='budget')
+            if intent == "balance":
+                self._update_context(user_id, topic='balance', response_type='analysis', state='active')
+                response = self.get_account_balance_analysis(financial_data)
+                response = self._add_conversational_transition(response, 'balance', context)
+                return self._humanize(response, topic='balance')
+            if intent == "loans":
+                self._update_context(user_id, topic='loans', response_type='analysis', state='active')
+                response = self.get_loan_analysis(financial_data)
+                response = response + "\n\nWant help with a payoff plan? I can suggest strategies."
+                return self._humanize(response, topic='loans')
+            if intent == "insurance":
+                self._update_context(user_id, topic='insurance', response_type='analysis', state='active')
+                response = self.get_insurance_analysis(financial_data)
+                response = response + "\n\nQuestions about coverage or comparing policies? Just ask."
+                return self._humanize(response, topic='insurance')
+            if intent == "cards":
+                self._update_context(user_id, topic='cards', response_type='analysis', state='active')
+                response = self.get_card_analysis(financial_data)
+                response = response + "\n\nI can help with utilization tips or rewards too."
+                return self._humanize(response, topic='cards')
+            if intent == "help":
+                self._update_context(user_id, state='help')
+                help_text = random.choice(HELP_OPENERS) + "I can help with: budget and spending, savings tips, investments, stocks under a price, loans, cards, insurance, balance. Just ask in your own words. What do you want to look at?"
+                return self._humanize(help_text, is_help=True)
+            if intent == "thanks":
+                self._update_context(user_id, state='active')
+                return random.choice(THANKS_RESPONSES) + " If you think of anything else, just ask."
+
+        # Fallback: keyword-based routing (when NN not used or low confidence)
         # Handle follow-up questions
         if is_followup and context['current_topic']:
             if context['current_topic'] == 'budget':
@@ -811,8 +987,8 @@ Would you like help getting started with tracking transactions?"""
                     "Happy to. Just tell me the max price, e.g. 'stocks under 500'.",
                 ])
         
-        # Route to appropriate handler with context tracking
-        if any(word in message_lower for word in ['budget', 'spending', 'expense', 'expenses', 'spend', 'money spent', 'where did my money go']):
+        # Route to appropriate handler with context tracking (order matters: more specific first)
+        if any(word in message_lower for word in ['budget', 'spending', 'expense', 'expenses', 'expences', 'spend', 'money spent', 'where did my money go', 'this month', 'monthly expense', 'how much did i spend', 'where is my money going', 'expense report', 'my spending']):
             self._update_context(user_id, topic='budget', response_type='analysis', state='active')
             response = self.analyze_spending_patterns(financial_data, is_followup)
             response = self._add_conversational_transition(response, 'budget', context)
@@ -906,8 +1082,8 @@ def chatbot_response():
         data = request.json
         user_message = data.get('message', '')
         
-        # Get user_id from session if available, otherwise use provided or default
-        user_id = session.get('user_id') or data.get('user_id', 'demo_user')
+        # Use only session user_id so we never show data when there's no connection to this user
+        user_id = session.get('user_id')
         user_mode = data.get('user_mode', 'professional')
         profile_data = data.get('profile_data', {})
         
@@ -956,34 +1132,60 @@ def turing_rating():
 
 @chatbot_bp.route('/api/insights', methods=['POST'])
 def get_insights():
-    """Get AI insights for dashboard"""
+    """Get AI insights for dashboard. Only uses real user data tied to logged-in user (session)."""
     try:
-        data = request.json
-        user_id = data.get('user_id', 'demo_user')
+        # Use only session user_id so we never show data when there's no connection to this user
+        user_id = session.get('user_id')
+        if not user_id:
+            return jsonify({
+                "response": (
+                    "No financial data found for your account. "
+                    "Sign in and add accounts or import data via OCR (Import menu) so I can analyze your finances and show insights here."
+                )
+            }), 200
+        data = request.json or {}
         user_mode = data.get('user_mode', 'professional')
         profile_data = data.get('profile_data', {})
         
-        # Get financial data and generate insights
         financial_data = chatbot.get_user_financial_data(user_id)
+        data_values = [v for v in (financial_data or {}).values() if isinstance(v, (list, dict))]
+        if not financial_data or not data_values or all(not x for x in data_values):
+            return jsonify({"response": "No financial data available."}), 200
+        # If total expenses = 0, do not show analysis with mock numbers
+        total_expenses = sum(
+            item.get('total_amount', 0) for item in financial_data.get('spending_by_category', [])
+        ) if financial_data.get('spending_by_category') else 0
+        if total_expenses == 0:
+            return jsonify({"response": "No financial activity recorded yet."}), 200
         insights = chatbot.analyze_spending_patterns(financial_data)
-        
         return jsonify({"response": insights}), 200
         
     except Exception as e:
-        return jsonify({"response": "Analyzing your financial data to provide personalized insights..."}), 500
+        return jsonify({
+            "response": "Unable to load insights right now. Please try again later."
+        }), 500
 
 @chatbot_bp.route('/api/budget', methods=['POST'])
 def get_budget_analysis():
-    """Get budget analysis"""
+    """Get budget analysis. Only for logged-in user's data."""
     try:
-        data = request.json
-        user_id = data.get('user_id', 'demo_user')
+        user_id = session.get('user_id')
+        if not user_id:
+            return jsonify({
+                "response": "Sign in and add accounts or import data via OCR to see budget analysis."
+            }), 200
+        data = request.json or {}
         user_mode = data.get('user_mode', 'professional')
         
-        # Get financial data
         financial_data = chatbot.get_user_financial_data(user_id)
+        if not financial_data:
+            return jsonify({
+                "response": "No financial activity recorded yet.",
+                "chart_data": [],
+                "summary": "No financial activity recorded yet."
+            }), 200
         
-        # Generate budget analysis
+        # Generate budget analysis from real data only
         spending_analysis = chatbot.analyze_spending_patterns(financial_data)
         savings_recommendations = chatbot.get_savings_recommendations(financial_data)
         
@@ -1010,8 +1212,8 @@ def get_budget_analysis():
 def get_guidance():
     """Get general financial guidance"""
     try:
-        data = request.json
-        user_id = data.get('user_id', 'demo_user')
+        data = request.json or {}
+        user_id = session.get('user_id') or data.get('user_id')
         user_mode = data.get('user_mode', 'professional')
         profile_data = data.get('profile_data', {})
         

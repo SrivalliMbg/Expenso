@@ -1,0 +1,54 @@
+{
+  "greeting": [
+    "hello", "hi", "hey", "good morning", "good afternoon", "good evening",
+    "hi there", "hello there", "hey there", "hiya", "heya"
+  ],
+  "casual_how": [
+    "how are you", "how you doing", "how do you do", "how's it going", "how r u",
+    "what's up", "whats up", "how ya doing", "you good", "doing good", "doing well",
+    "how have you been", "how is it going", "and you", "wbu", "sup"
+  ],
+  "budget": [
+    "what are my expenses this month", "my expenses this month", "expenses this month",
+    "what are my expences this month", "show my expenses", "my spending",
+    "where did my money go", "how much did I spend", "spending analysis",
+    "analyze my budget", "budget analysis", "my budget", "spending this month",
+    "where is my money going", "expense report", "my expences", "monthly expenses",
+    "how much I spent", "spendings", "what did I spend on"
+  ],
+  "savings": [
+    "how can I save more", "save money", "savings tips", "how to save",
+    "improve savings", "saving advice", "ways to save", "save more money"
+  ],
+  "investment": [
+    "investment advice", "where should I invest", "invest", "portfolio",
+    "mutual fund", "sip", "investment tips", "my investments"
+  ],
+  "stock": [
+    "stocks under 500", "show me stocks", "cheap stocks", "shares",
+    "stocks under 200", "equity", "stock recommendations"
+  ],
+  "transactions": [
+    "recent transactions", "transaction history", "my transactions",
+    "what did I buy", "activity", "recent activity", "last transactions"
+  ],
+  "balance": [
+    "account balance", "my balance", "how much do I have", "total balance",
+    "account balances", "money in account", "funds", "my money"
+  ],
+  "loans": [
+    "my loans", "loan", "debt", "how much do I owe", "borrow", "loan status"
+  ],
+  "insurance": [
+    "insurance", "policy", "premium", "coverage", "my insurance", "policies"
+  ],
+  "cards": [
+    "credit card", "debit card", "my cards", "card balance", "cards"
+  ],
+  "help": [
+    "what can you do", "help", "what do you do", "capabilities", "how does this work"
+  ],
+  "thanks": [
+    "thank you", "thanks", "thank you so much", "appreciate it", "grateful"
+  ]
+}

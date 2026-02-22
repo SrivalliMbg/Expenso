@@ -113,13 +113,56 @@ fetch('/api/chatbot', {
 .then(data => console.log(data.response));
 ```
 
+## Deployment (Render + GitHub Actions)
+
+### How automation works
+
+1. **Push to `main`** triggers the GitHub Actions workflow (`.github/workflows/deploy.yml`).
+2. The workflow **validates** the project: installs dependencies, runs `python -c "import app"`, and builds the Docker image to ensure the Dockerfile is valid.
+3. If all steps pass, it **calls the Render deploy hook** (POST request to the URL you configure). Render then builds and deploys from the connected GitHub repo.
+4. No manual steps are required after the initial setup (connect repo on Render, add the deploy hook secret in GitHub).
+
+### GitHub Secrets
+
+1. In your GitHub repo go to **Settings → Secrets and variables → Actions**.
+2. Add a **Repository secret**:
+   - **Name:** `RENDER_DEPLOY_HOOK`
+   - **Value:** the full deploy hook URL from Render (see below).
+
+Without this secret, the workflow still runs validation but skips the deploy trigger.
+
+### Render deploy hook
+
+1. In [Render](https://render.com), open your **Web Service** (or create one connected to this repo).
+2. Go to **Settings → Deploy Hook**.
+3. Copy the **Deploy Hook URL** (e.g. `https://api.render.com/deploy/srv/...?key=...`).
+4. Paste this URL as the value of the `RENDER_DEPLOY_HOOK` secret in GitHub (see above).
+
+On each push to `main`, GitHub Actions will POST to this URL so Render starts a new deploy.
+
+### Environment variables on Render
+
+Set these in the Render service **Environment** tab:
+
+- **Required:** `DATABASE_URL` (MySQL connection URL, e.g. `mysql://user:pass@host:3306/db`) or use `MYSQL_HOST`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DB`.
+- **Required:** `SECRET_KEY` (Flask secret key; use a long random string in production).
+- **Optional:** `DEMO_MODE` — set to `True` to allow copying synthetic transaction data between users in demo setups; default is `False`.
+- **Production defaults** (can override): `FLASK_ENV=production`, `DEBUG=False`.
+
+Render sets `PORT` at runtime; the Dockerfile uses it for gunicorn.
+
+---
+
 ## Configuration
 
 ### Environment Variables
-- `MYSQL_HOST` - Database host
+- `MYSQL_HOST` - Database host (or use `DATABASE_URL`)
 - `MYSQL_USER` - Database username
 - `MYSQL_PASSWORD` - Database password
 - `MYSQL_DB` - Database name
+- `DATABASE_URL` - Full MySQL URL (overrides MYSQL_* when set; used on Render)
+- `SECRET_KEY` - Flask secret key (required in production)
+- `DEMO_MODE` - Optional; `True`/`False` for demo seed behavior
 - `HF_TOKEN` - Hugging Face access token
 
 ### Model Configuration

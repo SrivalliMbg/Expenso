@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Access Denied - Expenso</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='CSS/home.css') }}" />
+</head>
+<body>
+  <div class="container">
+    <aside class="sidebar">
+      <div class="profile">
+        <div class="profile-row">
+          <a href="/" class="logo-link">
+            <img src="{{ url_for('static', filename='images/logo.jpg') }}" alt="Expenso Logo" class="logo">
+          </a>
+        </div>
+        <div class="username-row">
+          <span class="username" id="sidebarUsername">{{ username }}</span>
+        </div>
+      </div>
+      <nav class="menu">
+        <a href="/">Home</a>
+        <a href="/accounts_page">Accounts</a>
+        <a href="/cards_page">Cards</a>
+        <a href="/insurance_page">Insurance</a>
+        <a href="/investments_page">Investments</a>
+        <a href="/recent_page">Recent Transactions</a>
+        <a href="/expenses_page">Expenses</a>
+        <a href="/logout_page" class="logout" onclick="return confirm('Logout?');">Logout</a>
+      </nav>
+    </aside>
+    <main class="dashboard" style="padding: 2rem;">
+      <h1 style="color: #c0392b;">403 Forbidden</h1>
+      <p>{{ message or 'You do not have permission to access this page.' }}</p>
+      <p><a href="/">Return to Home</a></p>
+    </main>
+  </div>
+</body>
+</html>

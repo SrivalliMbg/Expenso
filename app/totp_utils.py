@@ -2,7 +2,7 @@ import pyotp
 import qrcode
 import io
 import base64
-from flask import current_app
+from flask import current_app, g
 
 # Use PIL image factory so QR code is a real PNG (requires Pillow)
 try:
@@ -41,7 +41,7 @@ class TOTPManager:
 
         qr = qrcode.QRCode(**kwargs)
         qr.add_data(totp_uri)
-        qr.make(fit=True)
+        qr.make(fit=True) 
         
         img = qr.make_image(fill_color="black", back_color="white")
         
@@ -73,7 +73,7 @@ class TOTPManager:
     def is_totp_enabled(user_id):
         """Check if TOTP is enabled for a user"""
         try:
-            cursor = current_app.mysql.cursor(dictionary=True)
+            cursor = g.mysql.cursor(dictionary=True)
             cursor.execute("SELECT totp_secret FROM users WHERE id = %s", (user_id,))
             user = cursor.fetchone()
             cursor.close()
@@ -87,7 +87,7 @@ class TOTPManager:
     def get_user_totp_secret(user_id):
         """Get TOTP secret for a user"""
         try:
-            cursor = current_app.mysql.cursor(dictionary=True)
+            cursor = g.mysql.cursor(dictionary=True)
             cursor.execute("SELECT totp_secret FROM users WHERE id = %s", (user_id,))
             user = cursor.fetchone()
             cursor.close()
@@ -99,32 +99,34 @@ class TOTPManager:
     
     @staticmethod
     def enable_totp(user_id, secret):
-        """Enable TOTP for a user"""
+        """Enable TOTP for a user; set two_factor_enabled = True."""
         try:
-            cursor = current_app.mysql.cursor()
+            cursor = g.mysql.cursor()
             cursor.execute(
-                "UPDATE users SET totp_secret = %s WHERE id = %s",
+                "UPDATE users SET totp_secret = %s, two_factor_enabled = TRUE WHERE id = %s",
                 (secret, user_id)
             )
-            current_app.mysql.commit()
+            g.mysql.commit()
             cursor.close()
             return True
         except Exception as e:
-            current_app.logger.error(f"Error enabling TOTP: {str(e)}")
+            if current_app and getattr(current_app, "logger", None):
+                current_app.logger.error("Error enabling TOTP: %s", str(e))
             return False
     
     @staticmethod
     def disable_totp(user_id):
-        """Disable TOTP for a user"""
+        """Disable TOTP for a user; set two_factor_enabled = FALSE."""
         try:
-            cursor = current_app.mysql.cursor()
+            cursor = g.mysql.cursor()
             cursor.execute(
-                "UPDATE users SET totp_secret = NULL WHERE id = %s",
+                "UPDATE users SET totp_secret = NULL, two_factor_enabled = 0 WHERE id = %s",
                 (user_id,)
             )
-            current_app.mysql.commit()
+            g.mysql.commit()
             cursor.close()
             return True
         except Exception as e:
-            current_app.logger.error(f"Error disabling TOTP: {str(e)}")
+            if current_app and getattr(current_app, "logger", None):
+                current_app.logger.error("Error disabling TOTP: %s", str(e))
             return False

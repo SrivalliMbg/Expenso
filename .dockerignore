@@ -1,0 +1,45 @@
+# Git and env
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.venv
+venv
+env
+
+# IDE and OS
+.idea
+.vscode
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local dev and secrets
+ssl/
+*.pem
+.run
+*.log
+
+# Tests and scripts (not needed in runtime image)
+scripts/
+tests/
+test_*.py
+*_test.py
+pytest.ini
+.coverage
+htmlcov/
+
+# Docs and datasets (optional; remove if app needs them)
+datasets/
+*.md
+!README.md
+
+# GitHub
+.github

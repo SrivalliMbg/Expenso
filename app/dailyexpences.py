@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, render_template, current_app, session, redirect
+from flask import Blueprint, request, jsonify, render_template, current_app, g, session, redirect
 from werkzeug.security import generate_password_hash, check_password_hash
 
 main = Blueprint("main", __name__)
@@ -41,13 +41,13 @@ def register():
     hashed_password = generate_password_hash(password)
 
     try:
-        cursor = current_app.mysql.cursor()
+        cursor = g.mysql.cursor()
         cursor.execute(
             """INSERT INTO users (username, email, password, status, dob, phone, profession)
                VALUES (%s, %s, %s, %s, %s, %s, %s)""",
             (username, email, hashed_password, status, dob, phone, profession)
         )
-        current_app.mysql.commit()
+        g.mysql.commit()
         cursor.close()
         return jsonify({"message": "User registered successfully"}), 201
     except Exception as e:
@@ -67,7 +67,7 @@ def login():
     password = data.get("password")
 
     try:
-        cursor = current_app.mysql.cursor(dictionary=True)
+        cursor = g.mysql.cursor(dictionary=True)
         cursor.execute("SELECT * FROM users WHERE username=%s", (username,))
         user = cursor.fetchone()
         cursor.close()
@@ -95,7 +95,7 @@ def daily_expenses():
         return jsonify({"message": "Unauthorized"}), 401
 
     try:
-        cursor = current_app.mysql.cursor(dictionary=True)
+        cursor = g.mysql.cursor(dictionary=True)
         cursor.execute("""
             SELECT DATE(date) AS day, SUM(amount) AS total
             FROM transactions

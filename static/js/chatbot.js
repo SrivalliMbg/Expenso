@@ -46,7 +46,7 @@
         var user = null;
         try { user = JSON.parse(sessionStorage.getItem('user')); } catch (e) {}
         var body = {
-            user_id: (user && user.id) || 'demo_user',
+            user_id: (user && user.id) || null,
             message: msg,
             user_mode: (user && user.status) || 'professional',
             profile_data: { Name: (user && user.username) || '', Status: (user && user.status) || 'professional', Profession: (user && user.profession) || '' },

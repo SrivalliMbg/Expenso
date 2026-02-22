@@ -83,6 +83,29 @@ function initDashboard() {
     }
 }
 
+// If any dashboard API returns 401, clear session and redirect so we never show stale/wrong user data
+function handleDashboard401() {
+    sessionStorage.removeItem('user');
+    setDashboardEmpty();
+    window.location.href = '/login_page';
+}
+
+function setDashboardEmpty() {
+    const ids = ['totalInflow', 'totalOutflow', 'chartTotal', 'savingsBalance', 'creditBalance', 'cardsAmount', 'loansAmount', 'upcomingCount'];
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = id === 'upcomingCount' ? '0' : '₹0';
+    });
+    const categoryList = document.getElementById('categoryList');
+    if (categoryList) {
+        categoryList.innerHTML = '<div class="category-item"><i class="fas fa-info-circle category-icon"></i><span class="category-name">No spending data</span><span class="category-amount">₹0</span></div>';
+    }
+    const transactionList = document.getElementById('transactionList');
+    if (transactionList) {
+        transactionList.innerHTML = '<div class="transaction-item"><div class="transaction-icon"><i class="fas fa-info-circle"></i></div><div class="transaction-details"><div class="transaction-description">No transactions yet</div><div class="transaction-date">Sign in to see your data</div></div><div class="transaction-amount">₹0</div></div>';
+    }
+}
+
 // Load all dashboard data from database
 function loadDashboardData() {
     // Load financial summary
@@ -101,8 +124,15 @@ function loadDashboardData() {
 // Load financial summary data with time period selection
 function loadFinancialSummary(period = 'this_month') {
     fetch(`/api/dashboard/summary/${period}`)
-        .then(response => response.json())
+        .then(response => {
+            if (response.status === 401) {
+                handleDashboard401();
+                return null;
+            }
+            return response.json();
+        })
         .then(data => {
+            if (data == null) return;
             // Update inflow and outflow amounts
             const totalInflow = document.getElementById('totalInflow');
             const totalOutflow = document.getElementById('totalOutflow');
@@ -278,8 +308,15 @@ function updateSpendingChart(categories) {
 // Load recent transactions
 function loadRecentTransactions() {
     fetch('/api/dashboard/transactions')
-        .then(response => response.json())
+        .then(response => {
+            if (response.status === 401) {
+                handleDashboard401();
+                return null;
+            }
+            return response.json();
+        })
         .then(data => {
+            if (data == null) return;
             const transactionList = document.getElementById('transactionList');
             if (!transactionList) return;
             
@@ -341,8 +378,15 @@ function loadRecentTransactions() {
 // Load accounts summary
 function loadAccountsSummary() {
     fetch('/api/dashboard/accounts')
-        .then(response => response.json())
+        .then(response => {
+            if (response.status === 401) {
+                handleDashboard401();
+                return null;
+            }
+            return response.json();
+        })
         .then(data => {
+            if (data == null) return;
             // Update account balances
             const savingsBalance = document.getElementById('savingsBalance');
             const creditBalance = document.getElementById('creditBalance');
@@ -380,8 +424,15 @@ function loadAccountsSummary() {
 // Load upcoming payments
 function loadUpcomingPayments() {
     fetch('/api/dashboard/upcoming')
-        .then(response => response.json())
+        .then(response => {
+            if (response.status === 401) {
+                handleDashboard401();
+                return null;
+            }
+            return response.json();
+        })
         .then(data => {
+            if (data == null) return;
             const upcomingCount = document.getElementById('upcomingCount');
             if (upcomingCount) {
                 upcomingCount.textContent = data.upcoming_count || 0;
@@ -414,14 +465,19 @@ function getTransactionIcon(category) {
     return icons[category] || icons.default;
 }
 
-// Load AI insights
+// Load AI insights (only for logged-in user; server uses session, no client user_id)
 function loadAIInsights() {
-    const user = JSON.parse(sessionStorage.getItem("user"));
-    const profileData = {
+    let user = null;
+    try {
+        user = JSON.parse(sessionStorage.getItem("user") || "null");
+    } catch (e) {
+        user = null;
+    }
+    const profileData = user ? {
         "Name": user.username,
         "Status": user.status || "professional",
         "Profession": user.profession || "Not specified"
-    };
+    } : {};
     
     fetch('/api/insights', {
         method: 'POST',
@@ -429,8 +485,7 @@ function loadAIInsights() {
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-            user_id: user.id || 'demo_user',
-            user_mode: user.status || 'professional',
+            user_mode: (user && user.status) || 'professional',
             profile_data: profileData,
             chat_history: []
         })
@@ -451,7 +506,7 @@ function loadAIInsights() {
         console.error('Error loading AI insights:', error);
         const insightElement = document.getElementById('ai-insight');
         if (insightElement) {
-            insightElement.innerHTML = 'Your AI financial assistant is analyzing your spending patterns to provide personalized insights.<br><br><strong>Quick Tips:</strong><br>&bull; Track your daily expenses<br>&bull; Set a monthly budget<br>&bull; Save at least 20% of your income<br>&bull; Review your spending weekly';
+            insightElement.innerHTML = 'Unable to load insights. Add accounts or import data via OCR to see analysis here.';
         }
     });
 }
@@ -600,7 +655,6 @@ function sendMessage() {
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-            user_id: user.id || 'demo_user',
             message: message,
             user_mode: user.status || 'professional',
             profile_data: profileData,
