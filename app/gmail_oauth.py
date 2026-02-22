@@ -87,41 +87,50 @@ def initiate_google_oauth():
     return authorization_url, state
 
 
-def store_oauth_tokens(user_id, access_token, refresh_token, expires_at, mysql_conn, app):
-    """Store encrypted access_token and refresh_token in DB. Table: oauth_tokens."""
+def store_oauth_tokens(user_id, access_token, refresh_token, expires_at, app):
+    """Store encrypted access_token and refresh_token in DB. Table: oauth_tokens. Uses Flask-SQLAlchemy db.session."""
+    from sqlalchemy import text
+    from app.models.ingestion_models import db
+
     key = _encryption_key(app)
     enc_access = _simple_encrypt(access_token, key)
     enc_refresh = _simple_encrypt(refresh_token, key) if refresh_token else None
-    cursor = mysql_conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS oauth_tokens (
-            user_id INT PRIMARY KEY,
-            provider VARCHAR(32) NOT NULL DEFAULT 'google',
-            access_token_encrypted TEXT,
-            refresh_token_encrypted TEXT,
-            expires_at DATETIME,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        )
-    """)
-    cursor.execute(
-        """REPLACE INTO oauth_tokens (user_id, provider, access_token_encrypted, refresh_token_encrypted, expires_at)
-           VALUES (%s, 'google', %s, %s, %s)""",
-        (user_id, enc_access, enc_refresh, expires_at)
-    )
-    mysql_conn.commit()
-    cursor.close()
+
+    with app.app_context():
+        db.session.execute(text("""
+            CREATE TABLE IF NOT EXISTS oauth_tokens (
+                user_id INTEGER PRIMARY KEY,
+                provider VARCHAR(32) NOT NULL DEFAULT 'google',
+                access_token_encrypted TEXT,
+                refresh_token_encrypted TEXT,
+                expires_at TIMESTAMP NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        db.session.execute(text("""
+            INSERT INTO oauth_tokens (user_id, provider, access_token_encrypted, refresh_token_encrypted, expires_at)
+            VALUES (:user_id, 'google', :enc_access, :enc_refresh, :expires_at)
+            ON CONFLICT (user_id) DO UPDATE SET
+                access_token_encrypted = EXCLUDED.access_token_encrypted,
+                refresh_token_encrypted = EXCLUDED.refresh_token_encrypted,
+                expires_at = EXCLUDED.expires_at,
+                updated_at = CURRENT_TIMESTAMP
+        """), {"user_id": user_id, "enc_access": enc_access, "enc_refresh": enc_refresh, "expires_at": expires_at})
+        db.session.commit()
 
 
-def get_oauth_tokens(user_id, mysql_conn, app):
-    """Retrieve and decrypt tokens for user. Returns (access_token, refresh_token) or (None, None)."""
+def get_oauth_tokens(user_id, app):
+    """Retrieve and decrypt tokens for user. Returns (access_token, refresh_token) or (None, None). Uses Flask-SQLAlchemy db.session."""
+    from sqlalchemy import text
+    from app.models.ingestion_models import db
+
     key = _encryption_key(app)
-    cursor = mysql_conn.cursor(dictionary=True)
-    cursor.execute(
-        "SELECT access_token_encrypted, refresh_token_encrypted FROM oauth_tokens WHERE user_id = %s AND provider = 'google'",
-        (user_id,)
-    )
-    row = cursor.fetchone()
-    cursor.close()
+    with app.app_context():
+        result = db.session.execute(
+            text("SELECT access_token_encrypted, refresh_token_encrypted FROM oauth_tokens WHERE user_id = :user_id AND provider = 'google'"),
+            {"user_id": user_id}
+        )
+        row = result.mappings().fetchone()
     if not row:
         return None, None
     access = _simple_decrypt(row.get("access_token_encrypted"), key)

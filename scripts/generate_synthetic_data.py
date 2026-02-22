@@ -25,18 +25,12 @@ from app.utils.synthetic_data import (
 
 
 def get_user_ids(app) -> list:
-    """Fetch existing user IDs from users table (MySQL pool)."""
-    if not getattr(app, "mysql_pool", None):
-        return []
-    conn = app.mysql_pool.get_connection()
-    try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT id FROM users")
-        ids = [r["id"] for r in cursor.fetchall()]
-        cursor.close()
-        return ids
-    finally:
-        conn.close()
+    """Fetch existing user IDs from users table. Uses Flask-SQLAlchemy db.session."""
+    from sqlalchemy import text
+    with app.app_context():
+        result = db.session.execute(text("SELECT id FROM users"))
+        rows = result.mappings().fetchall()
+        return [r["id"] for r in rows]
 
 
 def clear_synthetic_data() -> int:

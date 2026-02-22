@@ -34,23 +34,14 @@ def _build_gmail_query(base_query: str, after_date: Optional[datetime]) -> str:
 
 
 def _get_credentials_for_user(user_id: int, app):
-    """Build refreshable Credentials from stored tokens."""
+    """Build refreshable Credentials from stored tokens. Uses Flask-SQLAlchemy via get_oauth_tokens."""
     from google.oauth2.credentials import Credentials
     from app.gmail_oauth import get_oauth_tokens
 
-    if not getattr(app, "mysql_pool", None):
-        return None
-    conn = app.mysql_pool.get_connection()
     try:
-        access, refresh = get_oauth_tokens(user_id, conn, app)
-        conn.close()
+        access, refresh = get_oauth_tokens(user_id, app)
     except Exception as e:
         logger.exception("Failed to get OAuth tokens: %s", e)
-        if conn:
-            try:
-                conn.close()
-            except Exception:
-                pass
         return None
     if not access:
         return None

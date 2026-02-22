@@ -2,7 +2,7 @@ import pyotp
 import qrcode
 import io
 import base64
-from flask import current_app, g
+from flask import current_app
 
 # Use PIL image factory so QR code is a real PNG (requires Pillow)
 try:
@@ -71,60 +71,60 @@ class TOTPManager:
     
     @staticmethod
     def is_totp_enabled(user_id):
-        """Check if TOTP is enabled for a user"""
+        """Check if TOTP is enabled for a user. Uses Flask-SQLAlchemy db.session."""
         try:
-            cursor = g.mysql.cursor(dictionary=True)
-            cursor.execute("SELECT totp_secret FROM users WHERE id = %s", (user_id,))
-            user = cursor.fetchone()
-            cursor.close()
-            
-            return user and user.get('totp_secret') is not None
+            from sqlalchemy import text
+            from app.models.ingestion_models import db
+            result = db.session.execute(text("SELECT totp_secret FROM users WHERE id = :user_id"), {"user_id": user_id})
+            user = result.mappings().fetchone()
+            return user and user.get("totp_secret") is not None
         except Exception as e:
-            current_app.logger.error(f"Error checking TOTP status: {str(e)}")
+            if current_app and getattr(current_app, "logger", None):
+                current_app.logger.error("Error checking TOTP status: %s", str(e))
             return False
-    
+
     @staticmethod
     def get_user_totp_secret(user_id):
-        """Get TOTP secret for a user"""
+        """Get TOTP secret for a user. Uses Flask-SQLAlchemy db.session."""
         try:
-            cursor = g.mysql.cursor(dictionary=True)
-            cursor.execute("SELECT totp_secret FROM users WHERE id = %s", (user_id,))
-            user = cursor.fetchone()
-            cursor.close()
-            
-            return user.get('totp_secret') if user else None
+            from sqlalchemy import text
+            from app.models.ingestion_models import db
+            result = db.session.execute(text("SELECT totp_secret FROM users WHERE id = :user_id"), {"user_id": user_id})
+            user = result.mappings().fetchone()
+            return user.get("totp_secret") if user else None
         except Exception as e:
-            current_app.logger.error(f"Error getting TOTP secret: {str(e)}")
+            if current_app and getattr(current_app, "logger", None):
+                current_app.logger.error("Error getting TOTP secret: %s", str(e))
             return None
-    
+
     @staticmethod
     def enable_totp(user_id, secret):
-        """Enable TOTP for a user; set two_factor_enabled = True."""
+        """Enable TOTP for a user; set two_factor_enabled = True. Uses Flask-SQLAlchemy db.session."""
         try:
-            cursor = g.mysql.cursor()
-            cursor.execute(
-                "UPDATE users SET totp_secret = %s, two_factor_enabled = TRUE WHERE id = %s",
-                (secret, user_id)
+            from sqlalchemy import text
+            from app.models.ingestion_models import db
+            db.session.execute(
+                text("UPDATE users SET totp_secret = :secret, two_factor_enabled = TRUE WHERE id = :user_id"),
+                {"secret": secret, "user_id": user_id}
             )
-            g.mysql.commit()
-            cursor.close()
+            db.session.commit()
             return True
         except Exception as e:
             if current_app and getattr(current_app, "logger", None):
                 current_app.logger.error("Error enabling TOTP: %s", str(e))
             return False
-    
+
     @staticmethod
     def disable_totp(user_id):
-        """Disable TOTP for a user; set two_factor_enabled = FALSE."""
+        """Disable TOTP for a user; set two_factor_enabled = FALSE. Uses Flask-SQLAlchemy db.session."""
         try:
-            cursor = g.mysql.cursor()
-            cursor.execute(
-                "UPDATE users SET totp_secret = NULL, two_factor_enabled = 0 WHERE id = %s",
-                (user_id,)
+            from sqlalchemy import text
+            from app.models.ingestion_models import db
+            db.session.execute(
+                text("UPDATE users SET totp_secret = NULL, two_factor_enabled = FALSE WHERE id = :user_id"),
+                {"user_id": user_id}
             )
-            g.mysql.commit()
-            cursor.close()
+            db.session.commit()
             return True
         except Exception as e:
             if current_app and getattr(current_app, "logger", None):

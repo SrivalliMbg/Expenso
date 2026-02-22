@@ -1,40 +1,53 @@
 """
 Run from project root: python test_db_and_api.py
-Tests (1) MySQL transactions table structure and sample data, (2) dashboard API endpoints.
+Tests (1) transactions table structure and sample data via Flask-SQLAlchemy, (2) dashboard API endpoints.
 """
+import os
 import sys
 
-# --- 1) MySQL: transactions table structure and sample data ---
-print("=== MySQL: TRANSACTIONS TABLE ===")
+_PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
+from dotenv import load_dotenv
+load_dotenv()
+
+# --- 1) Database: transactions table via SQLAlchemy ---
+print("=== Database: TRANSACTIONS TABLE ===")
 try:
-    import mysql.connector
-    from config import Config
+    from app import create_app
+    from app.models.ingestion_models import db
+    from sqlalchemy import text
 
-    connection = mysql.connector.connect(
-        host=Config.MYSQL_HOST,
-        user=Config.MYSQL_USER,
-        password=Config.MYSQL_PASSWORD,
-        database=Config.MYSQL_DB,
-    )
-    cursor = connection.cursor(dictionary=True)
+    app = create_app()
+    with app.app_context():
+        # PostgreSQL: information_schema; MySQL has different schema
+        try:
+            r = db.session.execute(text("""
+                SELECT column_name, data_type
+                FROM information_schema.columns
+                WHERE table_name = 'transactions'
+                ORDER BY ordinal_position
+            """))
+            rows = r.fetchall()
+        except Exception:
+            rows = []
+        if rows:
+            print("Structure:")
+            for row in rows:
+                print(f"  {row[0]}: {row[1]}")
+        else:
+            print("  (table or schema not found; may be MySQL or empty)")
 
-    print("Structure:")
-    cursor.execute("DESCRIBE transactions")
-    for col in cursor.fetchall():
-        print(f"  {col['Field']}: {col['Type']}")
-
-    print("\nSample data (LIMIT 3):")
-    cursor.execute("SELECT * FROM transactions LIMIT 3")
-    rows = cursor.fetchall()
-    for row in rows:
-        print(f"  {row}")
-    if not rows:
-        print("  (no rows)")
-
-    cursor.close()
-    connection.close()
+        print("\nSample data (LIMIT 3):")
+        r = db.session.execute(text("SELECT * FROM transactions LIMIT 3"))
+        rows = r.mappings().fetchall()
+        for row in rows:
+            print(f"  {dict(row)}")
+        if not rows:
+            print("  (no rows)")
 except Exception as e:
-    print(f"MySQL Error: {e}")
+    print(f"Database Error: {e}")
     sys.exit(1)
 
 # --- 2) Dashboard API (app must be running on 127.0.0.1:5000) ---
@@ -45,7 +58,6 @@ try:
 
     base_url = "http://127.0.0.1:5000"
 
-    # Summary (try base summary first; some apps use /api/dashboard/summary/this_month)
     for path in ["/api/dashboard/summary", "/api/dashboard/summary/this_month"]:
         try:
             r = requests.get(f"{base_url}{path}", timeout=5)
@@ -57,7 +69,6 @@ try:
         except Exception as e:
             print(f"  Error: {e}")
 
-    # Accounts
     try:
         r = requests.get(f"{base_url}/api/dashboard/accounts", timeout=5)
         print(f"GET /api/dashboard/accounts -> {r.status_code}")

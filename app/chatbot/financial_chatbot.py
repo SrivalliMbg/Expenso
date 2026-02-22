@@ -3,7 +3,7 @@ Financial Chatbot for Expenso Application
 Integrated with the main Flask app and database
 """
 
-from flask import Blueprint, request, jsonify, current_app, g, session
+from flask import Blueprint, request, jsonify, current_app, session
 import pandas as pd
 import numpy as np
 import yfinance as yf
@@ -165,122 +165,71 @@ If financial data is empty, respond that no data exists.
         return None
 
     def get_user_financial_data(self, user_id):
-        """Get user's comprehensive financial data from all database tables. Returns {} when no DB, no user_id, or no accounts. No demo or default data."""
-        if not g.mysql or user_id is None or user_id == '':
+        """Get user's comprehensive financial data from all database tables. Uses Flask-SQLAlchemy db.session."""
+        if user_id is None or user_id == '':
             return {}
-        
-        cursor = None
         try:
-            cursor = g.mysql.cursor(dictionary=True, buffered=True)
-            
-            # Only this user's data: get accounts for user_id first
-            cursor.execute("""
-                SELECT id, type, bank, branch, acc_no, balance, created_at 
-                FROM accounts
-                WHERE user_id = %s
-            """, (user_id,))
-            accounts = cursor.fetchall()
-            account_ids = [a['id'] for a in accounts]
-            
+            from sqlalchemy import text, bindparam
+            from app.models.ingestion_models import db
+
+            r = db.session.execute(text("SELECT id, type, bank, branch, acc_no, balance, created_at FROM accounts WHERE user_id = :user_id"), {"user_id": user_id})
+            accounts = [dict(row) for row in r.mappings().fetchall()]
+            account_ids = [a["id"] for a in accounts]
             if not account_ids:
                 return {}
-            
-            placeholders = ','.join(['%s'] * len(account_ids))
-            
-            cursor.execute(f"""
-                SELECT id, account_id, title, amount, type, date, created_at
-                FROM transactions
-                WHERE account_id IN ({placeholders})
-                ORDER BY date DESC
-            """, tuple(account_ids))
-            transactions = cursor.fetchall()
-            
-            cursor.execute(f"""
-                SELECT id, account_id, title, amount, category, date, created_at
-                FROM expenses
-                WHERE account_id IN ({placeholders})
-                ORDER BY date DESC
-            """, tuple(account_ids))
-            expenses = cursor.fetchall()
-            
-            cursor.execute(f"""
-                SELECT id, account_id, card_type, card_number, expiry_date, cvv, limit_amount, created_at
-                FROM cards
-                WHERE account_id IN ({placeholders})
-            """, tuple(account_ids))
-            cards = cursor.fetchall()
-            
-            cursor.execute(f"""
-                SELECT id, account_id, investment_type, amount, start_date, maturity_date, created_at
-                FROM investments
-                WHERE account_id IN ({placeholders})
-            """, tuple(account_ids))
-            investments = cursor.fetchall()
-            
-            cursor.execute(f"""
-                SELECT id, account_id, description, amount, interest_rate, due_date, created_at
-                FROM loans
-                WHERE account_id IN ({placeholders})
-            """, tuple(account_ids))
-            loans = cursor.fetchall()
-            
-            cursor.execute(f"""
-                SELECT id, account_id, policy_name, premium_amount, coverage_amount, created_at
-                FROM insurance
-                WHERE account_id IN ({placeholders})
-            """, tuple(account_ids))
-            insurance = cursor.fetchall()
-            
-            cursor.execute(f"""
-                SELECT id, account_id, amount, created_at
-                FROM borrowings
-                WHERE account_id IN ({placeholders})
-            """, tuple(account_ids))
-            borrowings = cursor.fetchall()
-            
-            cursor.execute(f"""
-                SELECT category, SUM(amount) as total_amount, COUNT(*) as count
-                FROM expenses
-                WHERE account_id IN ({placeholders})
-                AND MONTH(date) = MONTH(CURDATE())
-                AND YEAR(date) = YEAR(CURDATE())
-                GROUP BY category
-                ORDER BY total_amount DESC
-            """, tuple(account_ids))
-            spending_by_category = cursor.fetchall()
-            
-            cursor.execute(f"""
-                SELECT type, SUM(amount) as total_amount, COUNT(*) as count
-                FROM transactions
-                WHERE account_id IN ({placeholders})
-                AND MONTH(date) = MONTH(CURDATE())
-                AND YEAR(date) = YEAR(CURDATE())
+
+            stmt = text("SELECT id, account_id, title, amount, type, date, created_at FROM transactions WHERE account_id IN :ids ORDER BY date DESC").bindparams(bindparam("ids", expanding=True))
+            transactions = [dict(row) for row in db.session.execute(stmt, {"ids": account_ids}).mappings().fetchall()]
+
+            stmt = text("SELECT id, account_id, title, amount, category, date, created_at FROM expenses WHERE account_id IN :ids ORDER BY date DESC").bindparams(bindparam("ids", expanding=True))
+            expenses = [dict(row) for row in db.session.execute(stmt, {"ids": account_ids}).mappings().fetchall()]
+
+            stmt = text("SELECT id, account_id, card_type, card_number, expiry_date, cvv, limit_amount, created_at FROM cards WHERE account_id IN :ids").bindparams(bindparam("ids", expanding=True))
+            cards = [dict(row) for row in db.session.execute(stmt, {"ids": account_ids}).mappings().fetchall()]
+
+            stmt = text("SELECT id, account_id, investment_type, amount, start_date, maturity_date, created_at FROM investments WHERE account_id IN :ids").bindparams(bindparam("ids", expanding=True))
+            investments = [dict(row) for row in db.session.execute(stmt, {"ids": account_ids}).mappings().fetchall()]
+
+            stmt = text("SELECT id, account_id, description, amount, interest_rate, due_date, created_at FROM loans WHERE account_id IN :ids").bindparams(bindparam("ids", expanding=True))
+            loans = [dict(row) for row in db.session.execute(stmt, {"ids": account_ids}).mappings().fetchall()]
+
+            stmt = text("SELECT id, account_id, policy_name, premium_amount, coverage_amount, created_at FROM insurance WHERE account_id IN :ids").bindparams(bindparam("ids", expanding=True))
+            insurance = [dict(row) for row in db.session.execute(stmt, {"ids": account_ids}).mappings().fetchall()]
+
+            stmt = text("SELECT id, account_id, amount, created_at FROM borrowings WHERE account_id IN :ids").bindparams(bindparam("ids", expanding=True))
+            borrowings = [dict(row) for row in db.session.execute(stmt, {"ids": account_ids}).mappings().fetchall()]
+
+            stmt = text("""
+                SELECT category, SUM(amount) as total_amount, COUNT(*) as count FROM expenses
+                WHERE account_id IN :ids AND EXTRACT(MONTH FROM date) = EXTRACT(MONTH FROM CURRENT_DATE) AND EXTRACT(YEAR FROM date) = EXTRACT(YEAR FROM CURRENT_DATE)
+                GROUP BY category ORDER BY total_amount DESC
+            """).bindparams(bindparam("ids", expanding=True))
+            spending_by_category = [dict(row) for row in db.session.execute(stmt, {"ids": account_ids}).mappings().fetchall()]
+
+            stmt = text("""
+                SELECT type, SUM(amount) as total_amount, COUNT(*) as count FROM transactions
+                WHERE account_id IN :ids AND EXTRACT(MONTH FROM date) = EXTRACT(MONTH FROM CURRENT_DATE) AND EXTRACT(YEAR FROM date) = EXTRACT(YEAR FROM CURRENT_DATE)
                 GROUP BY type
-            """, tuple(account_ids))
-            monthly_transaction_summary = cursor.fetchall()
-            
+            """).bindparams(bindparam("ids", expanding=True))
+            monthly_transaction_summary = [dict(row) for row in db.session.execute(stmt, {"ids": account_ids}).mappings().fetchall()]
+
             return {
-                'accounts': accounts,
-                'transactions': transactions,
-                'expenses': expenses,
-                'cards': cards,
-                'investments': investments,
-                'loans': loans,
-                'insurance': insurance,
-                'borrowings': borrowings,
-                'spending_by_category': spending_by_category,
-                'monthly_transaction_summary': monthly_transaction_summary,
-                'user_id': user_id
+                "accounts": accounts,
+                "transactions": transactions,
+                "expenses": expenses,
+                "cards": cards,
+                "investments": investments,
+                "loans": loans,
+                "insurance": insurance,
+                "borrowings": borrowings,
+                "spending_by_category": spending_by_category,
+                "monthly_transaction_summary": monthly_transaction_summary,
+                "user_id": user_id
             }
         except Exception as e:
-            print(f"Error fetching financial data: {e}")
+            if current_app and getattr(current_app, "logger", None):
+                current_app.logger.exception("Error fetching financial data: %s", e)
             return {}
-        finally:
-            if cursor is not None:
-                try:
-                    cursor.close()
-                except Exception:
-                    pass
     
     def analyze_spending_patterns(self, financial_data, is_followup=False):
         """Analyze user's spending patterns from real database data. No demo or hardcoded numbers."""

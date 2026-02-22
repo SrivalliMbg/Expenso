@@ -1,5 +1,7 @@
-from flask import Blueprint, request, jsonify, render_template, current_app, g, session, redirect
+from flask import Blueprint, request, jsonify, render_template, current_app, session, redirect
 from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy import text
+from app.models.ingestion_models import db
 
 main = Blueprint("main", __name__)
 
@@ -41,14 +43,12 @@ def register():
     hashed_password = generate_password_hash(password)
 
     try:
-        cursor = g.mysql.cursor()
-        cursor.execute(
-            """INSERT INTO users (username, email, password, status, dob, phone, profession)
-               VALUES (%s, %s, %s, %s, %s, %s, %s)""",
-            (username, email, hashed_password, status, dob, phone, profession)
+        db.session.execute(
+            text("""INSERT INTO users (username, email, password, status, dob, phone, profession)
+               VALUES (:username, :email, :password, :status, :dob, :phone, :profession)"""),
+            {"username": username, "email": email, "password": hashed_password, "status": status, "dob": dob, "phone": phone, "profession": profession}
         )
-        g.mysql.commit()
-        cursor.close()
+        db.session.commit()
         return jsonify({"message": "User registered successfully"}), 201
     except Exception as e:
         try:
@@ -67,10 +67,9 @@ def login():
     password = data.get("password")
 
     try:
-        cursor = g.mysql.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM users WHERE username=%s", (username,))
-        user = cursor.fetchone()
-        cursor.close()
+        r = db.session.execute(text("SELECT * FROM users WHERE username = :username"), {"username": username})
+        user_row = r.mappings().fetchone()
+        user = dict(user_row) if user_row else None
 
         if user and check_password_hash(user["password"], password):
             user.pop("password")
@@ -95,21 +94,17 @@ def daily_expenses():
         return jsonify({"message": "Unauthorized"}), 401
 
     try:
-        cursor = g.mysql.cursor(dictionary=True)
-        cursor.execute("""
+        r = db.session.execute(text("""
             SELECT DATE(date) AS day, SUM(amount) AS total
             FROM transactions
-            WHERE account_id IN (
-                SELECT id FROM accounts WHERE user_id = %s
-            )
+            WHERE account_id IN (SELECT id FROM accounts WHERE user_id = :user_id)
             AND type = 'Debit'
-            AND MONTH(date) = MONTH(CURDATE())
-            AND YEAR(date) = YEAR(CURDATE())
+            AND EXTRACT(MONTH FROM date) = EXTRACT(MONTH FROM CURRENT_DATE)
+            AND EXTRACT(YEAR FROM date) = EXTRACT(YEAR FROM CURRENT_DATE)
             GROUP BY DATE(date)
             ORDER BY DATE(date)
-        """, (user["id"],))
-        data = cursor.fetchall()
-        cursor.close()
+        """), {"user_id": user["id"]})
+        data = [dict(row) for row in r.mappings().fetchall()]
         return jsonify(data), 200
     except Exception as e:
         try:

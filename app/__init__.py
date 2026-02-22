@@ -4,10 +4,8 @@ import os
 from dotenv import load_dotenv
 load_dotenv()  # loads from project root (.env)
 
-from flask import Flask, g
+from flask import Flask
 from flask_cors import CORS
-import mysql.connector
-from mysql.connector import pooling
 from config import Config
 
 def create_app():
@@ -29,45 +27,18 @@ def create_app():
 
     CORS(app)
 
-    # Connection pool: each request gets its own connection to avoid "Commands out of sync" / "Connection not available"
-    try:
-        app.mysql_pool = pooling.MySQLConnectionPool(
-            pool_name="expenso_pool",
-            pool_size=10,
-            host=app.config["MYSQL_HOST"],
-            user=app.config["MYSQL_USER"],
-            password=app.config["MYSQL_PASSWORD"],
-            database=app.config["MYSQL_DB"],
-            autocommit=True,
-        )
-        print("✅ Database pool created successfully")
-    except mysql.connector.Error as err:
-        print(f"⚠️ Database pool failed: {err}")
-        app.mysql_pool = None
-
-    @app.before_request
-    def _request_mysql():
-        if app.mysql_pool is not None:
-            g.mysql = app.mysql_pool.get_connection()
-        else:
-            g.mysql = None
-
-    @app.teardown_request
-    def _teardown_mysql(exc=None):
-        if hasattr(g, "mysql") and g.mysql is not None:
-            try:
-                g.mysql.close()
-            except Exception:
-                pass
-
-    # Backward compatibility: current_app.mysql in request context = g.mysql (so existing code can use current_app.mysql if we patch it)
-    # We will replace current_app.mysql with g.mysql in all modules so each request uses its own connection.
-
-    # SQLAlchemy for ingestion models (ProcessedEmail, IngestedTransaction)
+    # Database: Flask-SQLAlchemy only (SQLALCHEMY_DATABASE_URI). No manual MySQL connection or pool.
     from .models.ingestion_models import db
     db.init_app(app)
     with app.app_context():
         db.create_all()
+        # Optional startup check: ensure DB is reachable
+        try:
+            from sqlalchemy import text
+            db.session.execute(text("SELECT 1"))
+            print("✅ Database connection OK")
+        except Exception as err:
+            print(f"⚠️ Database check failed: {err}")
 
     # Register blueprints
     from .routes import main
