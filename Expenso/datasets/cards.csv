@@ -1,2 +1,0 @@
-id,account_id,card_type,card_number,expiry_date,cvv,limit_amount,created_at
-1,1,Debit,4111111111111111,2028-05-31,123,50000.0,2025-08-29 19:43:00
