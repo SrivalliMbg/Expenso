@@ -24,4 +24,4 @@ COPY static ./static
 
 # Gunicorn binds to PORT (Render sets this)
 EXPOSE 10000
-CMD ["sh", "-c", "exec gunicorn --bind 0.0.0.0:${PORT:-10000} --workers 1 --threads 4 --timeout 120 app:create_app"]
+CMD gunicorn "app:create_app()" --bind 0.0.0.0:${PORT:-10000} --workers 1 --threads 4 --timeout 120
