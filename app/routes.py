@@ -2,9 +2,9 @@ import re
 from functools import wraps
 from flask import Blueprint, request, jsonify, render_template, current_app, session, redirect, url_for
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from sqlalchemy import text
-from .models.ingestion_models import db
+from .models.ingestion_models import db, ResetOTP
 from .totp_utils import TOTPManager
 from .forgot_otp import (
     generate_otp,
@@ -490,32 +490,20 @@ def forgot_send_otp():
         identifier = value.lower() if channel == "email" else re.sub(r"\D", "", value.strip().lstrip("+"))
         window_mins = current_app.config.get("OTP_RATE_LIMIT_WINDOW_MINUTES", 10)
         limit_count = current_app.config.get("OTP_RATE_LIMIT_COUNT", 5)
-        result = db.session.execute(
-            text("SELECT COUNT(*) AS cnt FROM reset_otps WHERE identifier = :identifier AND created_at > NOW() - (:window_mins || ' minutes')::INTERVAL"),
-            {"identifier": identifier, "window_mins": window_mins}
-        )
-        rate_row = result.mappings().fetchone()
-        if rate_row and (rate_row.get("cnt") or 0) >= limit_count:
+        threshold = datetime.utcnow() - timedelta(minutes=window_mins)
+        count = db.session.query(ResetOTP).filter(
+            ResetOTP.identifier == identifier,
+            ResetOTP.created_at > threshold
+        ).count()
+        if count >= limit_count:
             return jsonify({"message": f"Too many OTP requests. Try again after {window_mins} minutes."}), 429
         otp = generate_otp(6)
         expiry_mins = get_otp_expiry_minutes(current_app)
         expires_at = datetime.utcnow() + timedelta(minutes=expiry_mins)
-        db.session.execute(text("""
-            CREATE TABLE IF NOT EXISTS reset_otps (
-                id SERIAL PRIMARY KEY,
-                identifier VARCHAR(255) NOT NULL,
-                otp VARCHAR(10) NOT NULL,
-                user_id INTEGER NOT NULL,
-                expires_at TIMESTAMP NOT NULL,
-                reset_token VARCHAR(64) NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """))
-        db.session.execute(text("DELETE FROM reset_otps WHERE identifier = :identifier OR user_id = :user_id"), {"identifier": identifier, "user_id": user_id})
-        db.session.execute(
-            text("INSERT INTO reset_otps (identifier, otp, user_id, expires_at) VALUES (:identifier, :otp, :user_id, :expires_at)"),
-            {"identifier": identifier, "otp": otp, "user_id": user_id, "expires_at": expires_at}
-        )
+        db.session.query(ResetOTP).filter(
+            (ResetOTP.identifier == identifier) | (ResetOTP.user_id == user_id)
+        ).delete(synchronize_session=False)
+        db.session.add(ResetOTP(identifier=identifier, otp=otp, user_id=user_id, expires_at=expires_at))
         db.session.commit()
         sent = False
         if channel == "email":
@@ -562,14 +550,10 @@ def forgot_verify_otp():
         return jsonify({"message": "Email/phone and OTP are required."}), 400
     try:
         identifier = value.lower() if channel == "email" else re.sub(r"\D", "", value.strip().lstrip("+"))
-        result = db.session.execute(
-            text("SELECT id, user_id, expires_at, otp AS otp_stored FROM reset_otps WHERE identifier = :identifier"),
-            {"identifier": identifier}
-        )
-        row = result.mappings().fetchone()
+        row = db.session.query(ResetOTP).filter(ResetOTP.identifier == identifier).first()
         if not row:
             return jsonify({"message": "Invalid or expired OTP."}), 400
-        stored = (row.get("otp_stored") or "").strip()
+        stored = (row.otp or "").strip()
         if not stored:
             return jsonify({"message": "Invalid or expired OTP."}), 400
         if len(stored) == 64 and all(c in "0123456789abcdef" for c in stored.lower()):
@@ -578,13 +562,13 @@ def forgot_verify_otp():
             valid = (otp.strip() == stored)
         if not valid:
             return jsonify({"message": "Invalid or expired OTP."}), 400
-        exp = row["expires_at"]
+        exp = row.expires_at
         if exp and datetime.utcnow() > (exp.replace(tzinfo=None) if hasattr(exp, "replace") else exp):
-            db.session.execute(text("DELETE FROM reset_otps WHERE identifier = :identifier"), {"identifier": identifier})
+            db.session.delete(row)
             db.session.commit()
             return jsonify({"message": "OTP has expired. Please request a new one."}), 400
         reset_token = create_reset_token()
-        db.session.execute(text("UPDATE reset_otps SET reset_token = :reset_token WHERE id = :rid"), {"reset_token": reset_token, "rid": row["id"]})
+        row.reset_token = reset_token
         db.session.commit()
         return jsonify({"message": "Verified. You can now set a new password.", "reset_token": reset_token}), 200
     except Exception as e:
@@ -603,22 +587,18 @@ def forgot_reset_password():
     if not new_password or len(new_password) < 6:
         return jsonify({"message": "Password must be at least 6 characters."}), 400
     try:
-        result = db.session.execute(
-            text("SELECT user_id, expires_at FROM reset_otps WHERE reset_token = :reset_token"),
-            {"reset_token": reset_token}
-        )
-        row = result.mappings().fetchone()
+        row = db.session.query(ResetOTP).filter(ResetOTP.reset_token == reset_token).first()
         if not row:
             return jsonify({"message": "Invalid or expired reset link. Please start again from Forgot credentials."}), 400
-        expires_at = row["expires_at"]
+        expires_at = row.expires_at
         if expires_at and datetime.utcnow() > (expires_at.replace(tzinfo=None) if hasattr(expires_at, "replace") else expires_at):
-            db.session.execute(text("DELETE FROM reset_otps WHERE reset_token = :reset_token"), {"reset_token": reset_token})
+            db.session.delete(row)
             db.session.commit()
             return jsonify({"message": "Reset link has expired. Please request a new OTP."}), 400
-        user_id = row["user_id"]
+        user_id = row.user_id
         hashed = generate_password_hash(new_password)
         db.session.execute(text("UPDATE users SET password = :password WHERE id = :user_id"), {"password": hashed, "user_id": user_id})
-        db.session.execute(text("DELETE FROM reset_otps WHERE reset_token = :reset_token"), {"reset_token": reset_token})
+        db.session.delete(row)
         db.session.commit()
         return jsonify({"message": "Password updated successfully. You can now log in."}), 200
     except Exception as e:
@@ -869,6 +849,37 @@ def _require_dashboard_user():
 def _dashboard_account_filter():
     """Return SQL fragment to restrict dashboard data to logged-in user (use with :user_id)."""
     return " AND account_id IN (SELECT id FROM accounts WHERE user_id = :user_id)"
+
+
+def _date_range_this_month():
+    """Return (start, end) as date objects for current month. end is first day of next month (exclusive). Database-agnostic."""
+    today = date.today()
+    start = today.replace(day=1)
+    if today.month == 12:
+        end = start.replace(year=start.year + 1, month=1)
+    else:
+        end = start.replace(month=start.month + 1)
+    return start, end
+
+
+def _date_range_last_month():
+    """Return (start, end) for previous month. Database-agnostic."""
+    today = date.today()
+    if today.month == 1:
+        start = today.replace(year=today.year - 1, month=12, day=1)
+        end = today.replace(day=1)
+    else:
+        start = today.replace(month=today.month - 1, day=1)
+        end = today.replace(day=1)
+    return start, end
+
+
+def _date_range_this_year():
+    """Return (start, end) for current year. end is first day of next year."""
+    today = date.today()
+    start = today.replace(month=1, day=1)
+    end = start.replace(year=start.year + 1)
+    return start, end
 
 @main.route('/api/dashboard/summary', methods=['GET'])
 def get_dashboard_summary():

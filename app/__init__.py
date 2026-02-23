@@ -29,8 +29,20 @@ def create_app():
 
     CORS(app)
 
-    # Database: Flask-SQLAlchemy only (SQLALCHEMY_DATABASE_URI). No manual MySQL connection or pool.
-    from .models.ingestion_models import db
+    # SQLite: point to instance folder and avoid :memory: so the DB file persists
+    uri = (app.config.get("SQLALCHEMY_DATABASE_URI") or "").strip()
+    if uri.startswith("sqlite"):
+        instance_path = app.instance_path
+        os.makedirs(instance_path, exist_ok=True)
+        db_path = os.path.normpath(os.path.join(instance_path, "local.db"))
+        db_uri = "sqlite:///" + db_path.replace("\\", "/")
+        if ":memory:" in uri or uri in ("sqlite://", "sqlite:///"):
+            app.config["SQLALCHEMY_DATABASE_URI"] = db_uri
+        elif "local.db" in uri and not os.path.isabs(uri.replace("sqlite:///", "").strip().split("?")[0]):
+            app.config["SQLALCHEMY_DATABASE_URI"] = db_uri
+
+    # Database: Flask-SQLAlchemy only. Import all models so create_all() creates every table (including users).
+    from .models.ingestion_models import db, User, ResetOTP  # noqa: F401 - register tables for create_all
     db.init_app(app)
     with app.app_context():
         db.create_all()

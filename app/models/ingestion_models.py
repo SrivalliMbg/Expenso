@@ -1,5 +1,5 @@
 """
-Database models for email/SMS ingestion.
+Database models for email/SMS ingestion and core app (User).
 Indexes: ProcessedEmail.gmail_message_id (unique+index), IngestedTransaction.user_id, created_at.
 UploadedSMS/ProcessedSMS for SMS ingestion.
 """
@@ -7,6 +7,44 @@ from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
+
+
+class User(db.Model):
+    """Core user table (login, profile, TOTP). Used by routes via raw SQL; model ensures table is created by create_all()."""
+    __tablename__ = "users"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    username = db.Column(db.String(255), nullable=False, index=True)
+    email = db.Column(db.String(255), nullable=False, index=True)
+    password = db.Column(db.String(255), nullable=False)
+    status = db.Column(db.String(64), nullable=True, default="professional")
+    dob = db.Column(db.Date, nullable=True)
+    phone = db.Column(db.String(32), nullable=True)
+    profession = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=True)
+    totp_secret = db.Column(db.String(64), nullable=True)
+    two_factor_enabled = db.Column(db.Boolean, default=False, nullable=True)
+    is_admin = db.Column(db.Boolean, default=False, nullable=True)
+    totp_enabled_at = db.Column(db.DateTime, nullable=True)
+
+    def __repr__(self):
+        return f"<User {self.username}>"
+
+
+class ResetOTP(db.Model):
+    """OTP records for forgot-password flow. Rate-limit and expiry are enforced in app logic."""
+    __tablename__ = "reset_otps"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    identifier = db.Column(db.String(255), nullable=False, index=True)
+    otp = db.Column(db.String(10), nullable=False)
+    user_id = db.Column(db.Integer, nullable=False, index=True)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    reset_token = db.Column(db.String(64), nullable=True, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    def __repr__(self):
+        return f"<ResetOTP id={self.id} identifier={self.identifier}>"
 
 
 class ProcessedEmail(db.Model):

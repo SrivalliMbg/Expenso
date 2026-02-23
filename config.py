@@ -61,6 +61,7 @@ _raw_db_url = _env("DATABASE_URL")
 _db_from_url = _normalize_database_url(_raw_db_url) if _raw_db_url else None
 
 # Simple URI resolution: prefer DATABASE_URL (postgres:// -> postgresql://), else fall back to MySQL.
+# SQLite: :memory: is overridden in create_app() with instance/local.db so tables persist.
 db_url = os.getenv("DATABASE_URL", "").strip() or _raw_db_url
 if db_url:
     if db_url.startswith("postgres://"):
