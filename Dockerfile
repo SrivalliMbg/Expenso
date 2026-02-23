@@ -26,6 +26,7 @@ COPY static ./static
 # Render sets PORT at runtime; container must bind to 0.0.0.0:$PORT for port detection.
 EXPOSE 10000
 
-# wsgi:application is the WSGI app instance (create_app() called in wsgi.py). Do not use app:create_app
-# or Gunicorn will call create_app(environ, start_response) and raise "takes 0 positional arguments but 2 were given".
+# App factory fix: Gunicorn needs a WSGI app instance, not the factory. wsgi.py does application = create_app().
+# Using app:create_app would make Gunicorn call create_app(environ, start_response) -> TypeError (0 args but 2 given).
+# Using 'app:create_app()' is invalid: Gunicorn looks for an attribute named "create_app()", which does not exist.
 CMD ["sh", "-c", "gunicorn wsgi:application --bind 0.0.0.0:${PORT:-10000} --workers 1 --threads 4 --timeout 120"]
