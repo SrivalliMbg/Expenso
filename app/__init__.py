@@ -42,17 +42,17 @@ def create_app():
             app.config["SQLALCHEMY_DATABASE_URI"] = db_uri
 
     # Database: Flask-SQLAlchemy only. Import all models so create_all() creates every table (including users).
+    # Non-blocking: if DB is unreachable at startup, app still starts; routes will return 503 when DB is needed.
     from .models.ingestion_models import db, User, ResetOTP  # noqa: F401 - register tables for create_all
     db.init_app(app)
     with app.app_context():
-        db.create_all()
-        # Optional startup check: ensure DB is reachable
         try:
+            db.create_all()
             from sqlalchemy import text
             db.session.execute(text("SELECT 1"))
             print("✅ Database connection OK")
         except Exception as err:
-            print(f"⚠️ Database check failed: {err}")
+            print(f"⚠️ Database check failed (app will still start): {err}")
 
     # Register blueprints
     from .routes import main

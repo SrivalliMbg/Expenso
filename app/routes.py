@@ -135,6 +135,13 @@ def admin_seed_user():
         return jsonify({"message": "Seed failed.", "error": str(e)}), 500
 
 
+# -------------------- Health (no auth, no DB) - for Render / load balancers -------------------- #
+@main.route("/health")
+def health():
+    """Simple liveness check. No DB, no session. Use for Render or load balancer health checks."""
+    return "App is running", 200
+
+
 # -------------------- Render Pages -------------------- #
 
 @main.route("/")

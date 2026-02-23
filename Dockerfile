@@ -24,4 +24,5 @@ COPY static ./static
 
 # Gunicorn binds to PORT (Render sets this)
 EXPOSE 10000
-CMD gunicorn "app:create_app()" --bind 0.0.0.0:${PORT:-10000} --workers 1 --threads 4 --timeout 120
+# Factory app: use "app:create_app" (callable name, no parentheses). Gunicorn calls it to get the WSGI app.
+CMD gunicorn "app:create_app" --bind 0.0.0.0:${PORT:-10000} --workers 1 --threads 4 --timeout 120

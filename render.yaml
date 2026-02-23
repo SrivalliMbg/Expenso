@@ -1,0 +1,17 @@
+# Render Blueprint: Web Service (not background worker)
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: expenso
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:create_app --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: DEBUG
+        value: false
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
