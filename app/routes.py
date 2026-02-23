@@ -344,16 +344,26 @@ def login():
         return jsonify({"message": "Database not available. Please check your database connection."}), 503
 
     data = request.json
-    username = data.get("username")
-    password = data.get("password")
+    raw_username = (data.get("username") or "").strip()
+    password = (data.get("password") or "").strip()
     totp_code = data.get("totp_code")  # Optional TOTP code
+    # Normalize username like registration: lowercase, remove all whitespace (login form may send "Full Name")
+    username = re.sub(r"\s+", "", raw_username.lower()) if raw_username else ""
+
+    if not username or not password:
+        return jsonify({"message": "Username and password are required."}), 400
 
     try:
         result = db.session.execute(text("SELECT * FROM users WHERE username = :username"), {"username": username})
         user_row = result.mappings().fetchone()
         user = dict(user_row) if user_row else None
+        stored_hash = (user.get("password") or "") if user else ""
+        if isinstance(stored_hash, bytes):
+            stored_hash = stored_hash.decode("utf-8", errors="replace")
+        else:
+            stored_hash = str(stored_hash)
 
-        if user and check_password_hash(user["password"], password):
+        if user and stored_hash and check_password_hash(stored_hash, password):
             # 2FA: if TOTP enabled, do not create session yet; return TOTP_REQUIRED
             two_factor = user.get("two_factor_enabled") or bool(user.get("totp_secret"))
             if two_factor:
